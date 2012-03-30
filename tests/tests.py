@@ -8,9 +8,10 @@ os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 
 import unittest
 from celerybus.bus import Bus
-from celerybus.decorators import receiver, async
+from celerybus.decorators import receiver
 from celery.registry import tasks
 
+Bus.verbose = True
 
 class Test(unittest.TestCase):
     
@@ -23,19 +24,18 @@ class Test(unittest.TestCase):
         assert str in foo._receiver_of 
         assert len(foo._receiver_of) == 1
         
-        
     def testAsyncDeco(self):
         Bus.resetConfig()
         self._adec = None
         this = self
 
+        @receiver(str, async=True)
         def foo(msg):
             this._adec = msg
         
-        foo = async()(foo)
-        assert hasattr(foo, 'delay'), dir(foo)
+        #assert hasattr(foo, 'delay'), dir(foo)
         
-        Bus.subscribe(str, foo)
+        Bus.register(foo)
         
         msg = "xoxo"
         Bus.send(msg)
@@ -73,12 +73,18 @@ class Test(unittest.TestCase):
     def testBusRegister(self):
         Bus.resetConfig()
         self._ack = None
+        this = self
+        
         @receiver(str, int)
-        def foo(msg):
-            self._ack = msg
+        def foo_async(msg):
+            #print "Fail...."
+            this._ack = msg
+            #return "mooo"
+
+        assert foo_async.task.app.conf.CELERY_ALWAYS_EAGER
             
-        Bus.register(foo)
-        Bus.send("x")
+        Bus.register(foo_async)
+        Bus.send("x", fail_on_error=True)
         assert self._ack == "x"
         Bus.send(1)
         assert self._ack == 1

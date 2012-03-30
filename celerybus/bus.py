@@ -8,6 +8,8 @@ LOG = logging.getLogger(__name__)
 class Bus(object):
     ALL = "ALL"
     
+    verbose = False
+    
     @classmethod
     def resetConfig(cls):
         cls._global_handlers = set()
@@ -17,6 +19,8 @@ class Bus(object):
     def send(cls, message, fail_on_error=False):
         for callback in chain(cls._global_handlers, cls._message_handlers[type(message)]):
             try:
+                if cls.verbose:
+                    LOG.debug("invoking %s: %s", callback, message)
                 callback(message)
             except Exception:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
