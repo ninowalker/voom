@@ -1,3 +1,4 @@
+import inspect
 from celery.task import task
 from celery.registry import tasks
 from functools import update_wrapper
@@ -15,11 +16,25 @@ def receiver(*messages, **kwargs):
             return func
     return receiving
 
+
+def handler(**kwargs):
+    def handle(cls):
+        msgs = set()
+        for attr in inspect.getmembers(cls):
+            if hasattr(attr, '_receiver_of'):
+                msgs.update(attr._receiver_of)
+        
+        t = task(**kwargs)(cls)
+        tasks.register(t)
+        t._receiver_of = msgs
+        return Callable(t)
+    
     
 def make_async_task(func, **kwargs):
     t = task(**kwargs)(func)
     tasks.register(t)    
     return Callable(t)
+
 
 class Callable(object):
     def __init__(self, f):

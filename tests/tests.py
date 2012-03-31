@@ -9,11 +9,11 @@ os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 import unittest
 from celerybus.bus import Bus
 from celerybus.decorators import receiver
-from celery.registry import tasks
+from celerybus.consumer import MessageConsumer, consumer 
 
 Bus.verbose = True
 
-class Test(unittest.TestCase):
+class TestBasic(unittest.TestCase):
     
     def testDecorators(self):
         Bus.resetConfig()
@@ -32,8 +32,6 @@ class Test(unittest.TestCase):
         @receiver(str, async=True)
         def foo(msg):
             this._adec = msg
-        
-        #assert hasattr(foo, 'delay'), dir(foo)
         
         Bus.register(foo)
         
@@ -88,6 +86,24 @@ class Test(unittest.TestCase):
         assert self._ack == "x"
         Bus.send(1)
         assert self._ack == 1
+
+
+class TestHandlers(unittest.TestCase):
+    def test1(self):
+        Bus.resetConfig()
+        self._test1 = False
+        this = self
+        class AnalyticsConsumer(MessageConsumer):
+    
+            @consumer(int)
+            def handleInt(self, msg):
+                assert type(msg) == int
+                this._test1 = True
+                print "got int"
+                
+        Bus.register(AnalyticsConsumer())
+        Bus.send(1)
+        assert this._test1                
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
