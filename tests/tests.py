@@ -9,7 +9,7 @@ os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 import unittest
 from celerybus.bus import Bus
 from celerybus.decorators import receiver
-from celerybus.consumer import MessageConsumer, consumer 
+from celerybus.consumer import MessageConsumer, consumer, async
 
 Bus.verbose = True
 
@@ -88,22 +88,46 @@ class TestBasic(unittest.TestCase):
         assert self._ack == 1
 
 
-class TestHandlers(unittest.TestCase):
+class TestConsumers(unittest.TestCase):
     def test1(self):
         Bus.resetConfig()
         self._test1 = False
         this = self
-        class AnalyticsConsumer(MessageConsumer):
-    
+        class AConsumer(MessageConsumer):
             @consumer(int)
             def handleInt(self, msg):
                 assert type(msg) == int
                 this._test1 = True
                 print "got int"
                 
-        Bus.register(AnalyticsConsumer())
+        Bus.register(AConsumer())
         Bus.send(1)
-        assert this._test1                
+        assert this._test1
+        
+    def test2(self):                
+        Bus.resetConfig()
+        self._test2 = False
+        this = self
+         
+        @async
+        class BConsumer(MessageConsumer):
+            @consumer(int)
+            def handleInt(self, msg):
+                assert type(msg) == int
+                this._test2 = True
+
+            @consumer(str)
+            def handleStr(self, msg):
+                assert type(msg) == str
+                this._test2 = msg
+        
+        Bus.register(BConsumer)
+        Bus.send(1)
+        assert this._test2
+        
+        Bus.send(str("x"))
+        assert this._test2 == "x"
+        
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

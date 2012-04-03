@@ -1,6 +1,8 @@
 import collections
 import logging
-
+from celery.task import Task
+from celery.app.task import TaskType
+from .decorators import make_async_task
 
 def consumer(*messages):
     def consuming(func):
@@ -8,8 +10,12 @@ def consumer(*messages):
         return func
     return consuming
 
-class ConsumerMeta(type):
+def async(cls):
+    return make_async_task(cls, cls._receiver_of)
+
+class ConsumerMeta(TaskType):
     def __new__(cls, name, bases, attrs):
+        async = attrs.pop('async', True)
         msgs = attrs.get('_receiver_of', set())
         receiving = attrs.get('_receivers', collections.defaultdict(list))
         for attr in attrs.values():
@@ -23,8 +29,11 @@ class ConsumerMeta(type):
         return super(ConsumerMeta, cls).__new__(cls, name, bases, attrs)
 
 
-class MessageConsumer(object):
+class MessageConsumer(Task):
     __metaclass__ = ConsumerMeta 
+
+    def run(self, message):
+        self(message)
     
     def __call__(self, message):
         exception = None
@@ -33,7 +42,7 @@ class MessageConsumer(object):
             self.dispatch(message)
         except Exception, e:
             exception = e
-            self.on_failure(message, e)
+            self.on_dispatch_failure(message, e)
         finally:
             self.post_dispatch(message, exception)
 
@@ -47,6 +56,5 @@ class MessageConsumer(object):
     def post_dispatch(self, message, exception):
         pass
     
-    def on_failure(self, msg, exception):
-        import pdb; pdb.set_trace()
+    def on_dispatch_failure(self, msg, exception):
         logging.getLogger(self.__class__.__name__).error("Failed to process %s: %s", msg, exception)

@@ -37,8 +37,13 @@ class Bus(object):
         
     @classmethod
     def register(cls, handler):
-        assert hasattr(handler, '_receiver_of')
-        for msg_type in handler._receiver_of:
+        receiver_of = getattr(handler, '_receiver_of', None)
+        if not receiver_of:
+            if hasattr(handler, '__class__'):
+                receiver_of = getattr(handler.__class__, '_receiver_of', None)
+        #assert hasattr(handler, '_receiver_of')
+        assert receiver_of
+        for msg_type in receiver_of:
             cls.subscribe(msg_type, handler)
         
 
