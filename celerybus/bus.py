@@ -3,6 +3,8 @@ import logging
 import types
 from itertools import chain
 
+__ALL__ = ['Bus']
+
 LOG = logging.getLogger(__name__)
 
 class Bus(object):

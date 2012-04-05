@@ -2,7 +2,8 @@ import collections
 import logging
 from celery.task import Task
 from celery.app.task import TaskType
-from .decorators import make_async_task
+
+__ALL__ = ['MessageConsumer', 'AsyncConsumer', 'consumes']
 
 class ConsumerMeta(TaskType):
     def __new__(cls, name, bases, attrs):        
@@ -32,10 +33,10 @@ class MessageConsumer(Task):
     class Foo(MessageConsumer):
         queue = "some_celery_queue"
         
-        @consumer(some_message)
+        @consumes(some_message)
         def handle_some_message(self, msg): ...
         
-        @consumer(other_message, one_more_message)
+        @consumes(other_message, one_more_message)
         def handle_stuff(self, msg): ...
         
     Bus.register(Foo)
@@ -74,16 +75,17 @@ class MessageConsumer(Task):
 
 
 def AsyncConsumer(cls):
+    from celerybus.async import make_async_task
     return make_async_task(cls, cls._receiver_of, **cls._celery_task_kwargs)
 
 
-def consumer(*messages):
+def consumes(*messages):
     """Decorator for a function that identifies it as a consumer of a collection of messages.
     
     E.g.:
     
     class Foo(Consumer):
-        @consumer(str)
+        @consumes(str)
         def strPrinter(self, ...)
             pass
     

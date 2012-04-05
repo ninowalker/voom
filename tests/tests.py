@@ -7,9 +7,10 @@ import os
 os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 
 import unittest
-from celerybus.bus import Bus
-from celerybus.decorators import receiver 
-from celerybus.consumer import MessageConsumer, consumer, AsyncConsumer
+from celerybus import Bus
+from celerybus.consumer import MessageConsumer, consumes, AsyncConsumer
+from celerybus.decorators import receiver
+
 
 Bus.verbose = True
 
@@ -94,7 +95,7 @@ class TestConsumers(unittest.TestCase):
         self._test1 = False
         this = self
         class AConsumer(MessageConsumer):
-            @consumer(int)
+            @consumes(int)
             def handleInt(self, msg):
                 assert type(msg) == int
                 this._test1 = True
@@ -115,12 +116,12 @@ class TestConsumers(unittest.TestCase):
             max_retries = 2
             serializer = 'json'
             
-            @consumer(int)
+            @consumes(int)
             def handleInt(self, msg):
                 assert type(msg) == int
                 this._test2 = True
 
-            @consumer(str)
+            @consumes(str)
             def handleStr(self, msg):
                 assert type(msg) == str
                 this._test2 = msg
