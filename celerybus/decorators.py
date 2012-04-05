@@ -1,4 +1,4 @@
-from celery.task import task
+from celery.task import task as _task
 from celery.registry import tasks
 from functools import update_wrapper
 
@@ -13,10 +13,11 @@ def receiver(*messages, **kwargs):
             func._receiver_of = set(messages)
             return func
     return receiving
-    
+
+
     
 def make_async_task(func, messages, **kwargs):
-    t = task(**kwargs)(func)
+    t = _task(**kwargs)(func)
     tasks.register(t)
     c = AsyncCallable(t, messages)
     return c

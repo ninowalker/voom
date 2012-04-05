@@ -45,6 +45,6 @@ class Bus(object):
         assert receiver_of
         for msg_type in receiver_of:
             cls.subscribe(msg_type, handler)
-        
+            
 
 Bus.resetConfig()

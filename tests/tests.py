@@ -8,8 +8,8 @@ os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 
 import unittest
 from celerybus.bus import Bus
-from celerybus.decorators import receiver
-from celerybus.consumer import MessageConsumer, consumer, async
+from celerybus.decorators import receiver 
+from celerybus.consumer import MessageConsumer, consumer, AsyncConsumer
 
 Bus.verbose = True
 
@@ -109,8 +109,12 @@ class TestConsumers(unittest.TestCase):
         self._test2 = False
         this = self
          
-        @async
+        @AsyncConsumer
         class BConsumer(MessageConsumer):
+            """My docs"""
+            max_retries = 2
+            serializer = 'json'
+            
             @consumer(int)
             def handleInt(self, msg):
                 assert type(msg) == int
@@ -120,6 +124,9 @@ class TestConsumers(unittest.TestCase):
             def handleStr(self, msg):
                 assert type(msg) == str
                 this._test2 = msg
+        
+        assert BConsumer.task.max_retries == 2
+        assert BConsumer.task.serializer == 'json'
         
         Bus.register(BConsumer)
         Bus.send(1)
