@@ -1,4 +1,5 @@
 import collections
+import inspect
 import logging
 import types
 from itertools import chain
@@ -32,7 +33,7 @@ class Bus(object):
     @classmethod
     def subscribe(cls, message_type, callback):
         if message_type != cls.ALL:
-            assert type(message_type) == types.TypeType, type(message_type)
+            assert inspect.isclass(message_type), type(message_type)
             cls._message_handlers[message_type].add(callback)
         else:
             cls._global_handlers.add(callback)
