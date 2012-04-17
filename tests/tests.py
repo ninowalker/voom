@@ -87,7 +87,65 @@ class TestBasic(unittest.TestCase):
         assert self._ack == "x"
         Bus.send(1)
         assert self._ack == 1
+        
+class TestPriority(unittest.TestCase):
+    def test1(self):
+        msgs = []
+        Bus.resetConfig()
+        Bus.verbose = True
+        Bus.subscribe(str, lambda s: msgs.append(1), priority=Bus.HIGH_PRIORITY)
+        
+        Bus.send("frackle")
+        assert msgs == [1], msgs
+        msgs = []
 
+        Bus.subscribe(str, lambda s: msgs.append(3), priority=Bus.LOW_PRIORITY)
+        
+        Bus.send("frackle")
+        assert msgs == [1, 3], msgs
+        msgs = []
+
+        Bus.subscribe(str, lambda s: msgs.append(2))
+        Bus.send("frackle")
+        assert msgs == [1, 2, 3], msgs
+        
+        def hi(s):
+            return msgs.append(0)
+        Bus.subscribe(str, hi, priority=Bus.LOW_PRIORITY+1)
+        msgs = []
+        Bus.send("frackle")
+        assert msgs == [1, 2, 3, 0], msgs
+        Bus.subscribe(str, hi, priority=0)
+        msgs = []
+        Bus.send("frackle")
+        assert msgs == [0, 1, 2, 3], msgs
+        
+class TestBreadth(unittest.TestCase):
+    def test1(self):
+        msgs = []
+        Bus.resetConfig()
+        Bus.verbose = True
+        
+        def parent(s):
+            msgs.append("parent")
+            Bus.send(1)
+            
+        def child1(i):
+            msgs.append("c1")
+            Bus.send(1.1)
+
+        def child2(i):
+            msgs.append("c2")
+            
+        def child3(f):
+            msgs.append("c3")
+        
+        Bus.subscribe(str, parent)
+        Bus.subscribe(int, child1, priority=Bus.HIGH_PRIORITY)
+        Bus.subscribe(int, child2, priority=Bus.LOW_PRIORITY)
+        Bus.subscribe(float, child3)
+        Bus.send("x")
+        assert msgs == ["parent", "c1", "c2", "c3"], msgs
 
 class TestConsumers(unittest.TestCase):
     def test1(self):
