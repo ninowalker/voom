@@ -1,4 +1,5 @@
 import collections
+import inspect
 import logging
 import types
 #from celery import conf
@@ -70,7 +71,7 @@ class _Bus(object):
     def subscribe(self, message_type, callback, priority=1000):
         handlers = None
         if message_type != self.ALL:
-            assert type(message_type) == types.TypeType, type(message_type)
+            assert inspect.isclass(message_type), type(message_type)
             handlers = self._message_handlers[message_type]
         else:
             handlers = self._global_handlers
