@@ -1,11 +1,7 @@
 import collections
 import inspect
 import logging
-import types
-#from celery import conf
-from itertools import chain
 import threading
-from heapq import heappush
 import heapq
 import bisect
 
