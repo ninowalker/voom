@@ -11,6 +11,7 @@ LOG = logging.getLogger(__name__)
 
 class _Bus(object):
     ALL = "ALL"
+    ERRORS = "ERRORS"
     BREADTH_FIRST = "breadth_first"
     DEPTH_FIRST = "depth_first"
     
@@ -24,11 +25,12 @@ class _Bus(object):
         self.mode = mode
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
-        self.breadth_queue.msgs = []
         self.resetConfig()
     
     def resetConfig(self):
+        self.breadth_queue.msgs = []
         self._global_handlers = []
+        self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
 
     def send(self, message, fail_on_error=False):
@@ -53,24 +55,31 @@ class _Bus(object):
             self.breadth_queue.msgs.pop(0)
         
     
-    def _send(self, message, fail_on_error):
-        for priority, callback in heapq.merge(self._global_handlers, self._message_handlers[type(message)]):
+    def _send(self, message, fail_on_error, queue=None):
+        if queue == None:
+            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message)])
+        for priority, callback in queue:
             try:
                 if self.verbose:
                     LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
                 callback(message)
-            except Exception:
+            except Exception, ex:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
+                if queue != self._error_handlers:
+                    # avoid a circular loop
+                    self._send((message, callback, ex), False, queue=self._error_handlers)
                 if fail_on_error:
                     raise
     
     def subscribe(self, message_type, callback, priority=1000):
         handlers = None
-        if message_type != self.ALL:
+        if message_type == self.ALL:
+            handlers = self._global_handlers
+        elif message_type == self.ERRORS:
+            handlers = self._error_handlers
+        else:
             assert inspect.isclass(message_type), type(message_type)
             handlers = self._message_handlers[message_type]
-        else:
-            handlers = self._global_handlers
 
         LOG.debug("adding subscriber %s for %s", callback, message_type)
         

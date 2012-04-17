@@ -119,7 +119,37 @@ class TestPriority(unittest.TestCase):
         msgs = []
         Bus.send("frackle")
         assert msgs == [0, 1, 2, 3], msgs
+
+
+class TestErrorQueue(unittest.TestCase):
+    def test1(self):
+        msgs = []
+        Bus.resetConfig()
+        Bus.verbose = True
         
+        def fail(m):
+            raise Exception(m)
+        
+        def catch(m):
+            msgs.append(m)
+            
+        Bus.subscribe(Bus.ERRORS, catch, 0)
+        Bus.subscribe(str, fail)
+        Bus.send("cows")
+        assert len(msgs) == 1
+        msg, callback, ex = msgs[0]
+        assert msg == "cows"
+        assert callback == fail
+        assert "cows" in str(ex)
+
+        # ensure no recursion
+        msgs = []
+        Bus.subscribe(Bus.ERRORS, fail, 0)
+        Bus.send("cows")
+        assert len(msgs) == 1
+        msg, callback, ex = msgs[0]
+
+
 class TestBreadth(unittest.TestCase):
     def test1(self):
         msgs = []
