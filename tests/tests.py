@@ -148,6 +148,29 @@ class TestErrorQueue(unittest.TestCase):
         Bus.send("cows")
         assert len(msgs) == 1
         msg, callback, ex = msgs[0]
+        
+    def test2(self):                
+        Bus.resetConfig()
+        msgs = []
+                 
+        @AsyncConsumer
+        class FailConsumer(MessageConsumer):
+            """My docs"""            
+            @consumes(int)
+            def passes(self, v):
+                msgs.append(1)
+                pass
+
+            @consumes(int)
+            def fails(self, msg):
+                raise Exception(str(msg))
+        
+        Bus.register(FailConsumer)
+        Bus.subscribe(Bus.ERRORS, lambda m: msgs.append(m))
+        Bus.send(1)
+        assert len(msgs) == 2
+        assert msgs[1][0] == 1
+        assert "1" in str(msgs[1][2])
 
 
 class TestBreadth(unittest.TestCase):

@@ -42,7 +42,9 @@ class _Bus(object):
             self._send_breadth_first(message, fail_on_error)
             return
         self._send(message, fail_on_error)
-        
+    
+    def send_error(self, message, source, exception=None):
+        self._send((message, source, exception), False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
         root_event = len(self.breadth_queue.msgs) == 0
@@ -53,7 +55,6 @@ class _Bus(object):
         while len(self.breadth_queue.msgs):
             self._send(self.breadth_queue.msgs[0], fail_on_error)
             self.breadth_queue.msgs.pop(0)
-        
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
@@ -67,7 +68,7 @@ class _Bus(object):
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
                 if queue != self._error_handlers:
                     # avoid a circular loop
-                    self._send((message, callback, ex), False, queue=self._error_handlers)
+                    self.send_error(message, callback, ex)
                 if fail_on_error:
                     raise
     
