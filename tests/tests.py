@@ -142,7 +142,7 @@ class TestErrorQueue(unittest.TestCase):
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
         assert failure.message == "cows"
-        assert False, failure.invocation_context
+        assert len(failure.invocation_context)
         # ensure no recursion
         msgs = []
         Bus.subscribe(Bus.ERRORS, fail, 0)
