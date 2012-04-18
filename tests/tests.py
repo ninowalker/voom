@@ -139,19 +139,17 @@ class TestErrorQueue(unittest.TestCase):
         Bus.subscribe(str, fail)
         Bus.send("cows")
         assert len(msgs) == 1
-        msg, callback, ex = msgs[0]
-        assert msg == "cows"
-        assert callback == fail
-        assert "cows" in str(ex)
-        assert "fail" in str(ex)
-        assert ex[1] == "FancyException"
-
+        failure = msgs[0]
+        assert isinstance(failure.exception, FancyException)
+        assert failure.message == "cows"
+        assert False, failure.invocation_context
         # ensure no recursion
         msgs = []
         Bus.subscribe(Bus.ERRORS, fail, 0)
         Bus.send("cows")
         assert len(msgs) == 1
-        msg, callback, ex = msgs[0]
+        failure = msgs[0]
+        assert isinstance(failure.exception, FancyException)
         
     def test2(self):                
         Bus.resetConfig()

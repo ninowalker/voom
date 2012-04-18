@@ -6,10 +6,13 @@ import heapq
 import bisect
 import sys
 import traceback
+from collections import namedtuple
 
 __ALL__ = ['Bus']
 
 LOG = logging.getLogger(__name__)
+
+InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
 
 class _Bus(object):
     ALL = "ALL"
@@ -45,13 +48,15 @@ class _Bus(object):
             return
         self._send(message, fail_on_error)
     
-    def send_error(self, message, source, exception=None):
+    def send_error(self, message, source, exception=None, tb=None):
         if exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-            xtype = exc_type.__name__
-            exception = (str(exception), xtype, tb)
-        self._send((message, source, exception), False, queue=self._error_handlers)
+            tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)[2:])
+        context = traceback.format_stack()[::-1]
+        while "/celerybus/" in context[0]:
+            context.pop(0)
+        failure = InvocationFailure(message, exception, tb, context)
+        self._send(failure, False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
         root_event = len(self.breadth_queue.msgs) == 0
@@ -105,16 +110,13 @@ class _Bus(object):
             handlers.remove(old_item)
             LOG.info("callback %s re-registered with new priority. old=%s, new=%s", c, p, priority)
         bisect.insort(handlers, (priority, callback))
-        #heapq.heapify(handlers)
-        #sorted(handlers, key=lambda x: x[0])
-        LOG.info("Updated handlers: %s", handlers)
+        LOG.debug("Updated handlers: %s", handlers)
         
     def register(self, handler, priority=1000):
         receiver_of = getattr(handler, '_receiver_of', None)
         if not receiver_of:
             if hasattr(handler, '__class__'):
                 receiver_of = getattr(handler.__class__, '_receiver_of', None)
-        #assert hasattr(handler, '_receiver_of')
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
