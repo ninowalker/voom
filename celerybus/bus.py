@@ -4,6 +4,8 @@ import logging
 import threading
 import heapq
 import bisect
+import sys
+import traceback
 
 __ALL__ = ['Bus']
 
@@ -44,6 +46,11 @@ class _Bus(object):
         self._send(message, fail_on_error)
     
     def send_error(self, message, source, exception=None):
+        if exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+            xtype = exc_type.__name__
+            exception = (str(exception), xtype, tb)
         self._send((message, source, exception), False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):

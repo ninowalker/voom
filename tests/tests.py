@@ -127,8 +127,10 @@ class TestErrorQueue(unittest.TestCase):
         Bus.resetConfig()
         Bus.verbose = True
         
+        class FancyException(Exception): pass
+        
         def fail(m):
-            raise Exception(m)
+            raise FancyException(m)
         
         def catch(m):
             msgs.append(m)
@@ -141,6 +143,8 @@ class TestErrorQueue(unittest.TestCase):
         assert msg == "cows"
         assert callback == fail
         assert "cows" in str(ex)
+        assert "fail" in str(ex)
+        assert ex[1] == "FancyException"
 
         # ensure no recursion
         msgs = []
