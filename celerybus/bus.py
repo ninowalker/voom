@@ -25,9 +25,10 @@ class _Bus(object):
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST):
+    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=False):
         self.verbose = verbose
         self.mode = mode
+        self.raise_errors = raise_errors
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
@@ -81,7 +82,7 @@ class _Bus(object):
                 if queue != self._error_handlers:
                     # avoid a circular loop
                     self.send_error(message, callback, ex)
-                if fail_on_error:
+                if fail_on_error or self.raise_errors:
                     raise
     
     def subscribe(self, message_type, callback, priority=1000):
