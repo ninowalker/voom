@@ -60,6 +60,8 @@ class _Bus(object):
         self._send(failure, False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
+        if not hasattr(self.breadth_queue, 'msgs'):
+            self.breadth_queue.msgs = []
         root_event = len(self.breadth_queue.msgs) == 0
         self.breadth_queue.msgs.append(message)
         if not root_event:
