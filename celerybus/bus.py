@@ -25,10 +25,16 @@ class _Bus(object):
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=False):
+    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None):
         self.verbose = verbose
         self.mode = mode
-        self.raise_errors = raise_errors
+
+        if raise_errors is not None:
+            self.raise_errors = raise_errors
+        else:
+            from celery import conf
+            self.raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
+
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
