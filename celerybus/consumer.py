@@ -1,7 +1,8 @@
 import collections
 import logging
-from celery.task import Task
+
 from celery.app.task import TaskType
+from celery.task import Task
 from celerybus.bus import Bus
 
 __ALL__ = ['MessageConsumer', 'AsyncConsumer', 'consumes']

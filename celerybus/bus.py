@@ -1,12 +1,13 @@
+import bisect
 import collections
+from collections import namedtuple
+import heapq
 import inspect
 import logging
-import threading
-import heapq
-import bisect
+import os
 import sys
+import threading
 import traceback
-from collections import namedtuple
 
 __ALL__ = ['Bus']
 
@@ -25,7 +26,9 @@ class _Bus(object):
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None):
+    DEFAULT_TASK_KWARGS = None
+    
+    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, default_task_kwargs=DEFAULT_TASK_KWARGS):
         self.verbose = verbose
         self.mode = mode
 
@@ -38,14 +41,20 @@ class _Bus(object):
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
+        self.default_task_kwargs = default_task_kwargs or {}
     
     def resetConfig(self):
         self.breadth_queue.msgs = []
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
+        self.handlers_loaded = False
 
     def send(self, message, fail_on_error=False):
+        if not self.handlers_loaded and loader:
+            loader.load_handlers()
+            self.handlers_loaded = True
+            
         if self.always_eager_mode == None:
             from celery import conf
             if conf.ALWAYS_EAGER:
@@ -130,6 +139,19 @@ class _Bus(object):
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
-            
+    
+                
 Bus = _Bus()
 Bus.resetConfig()
+
+loader = None
+def setup_bus(Bus):
+    global loader
+    from celery.utils import get_cls_by_name    
+    try:
+        loader_cls = get_cls_by_name(os.environ.get('CELERYBUS_LOADER'))
+    except (ValueError, ImportError, AttributeError):
+        pass
+    loader = loader_cls()
+    loader.setup_bus(Bus)
+setup_bus(Bus)
