@@ -4,6 +4,7 @@ Created on Mar 30, 2012
 @author: nino
 '''
 import os
+from celerybus.transient import TransientSubscriber
 os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
 
 import unittest
@@ -248,6 +249,21 @@ class TestConsumers(unittest.TestCase):
         
         Bus.send(str("x"))
         assert this._test2 == "x"
+        
+class TestTransient(unittest.TestCase):
+    def test1(self):
+        Bus.resetConfig()
+        self.val = None
+        def testo(msg):
+            self.val = msg
+            
+        TransientSubscriber(Bus, testo, str)
+        Bus.send("bark")
+        assert self.val == "bark"
+        self.val = None
+        del testo
+        Bus.send("bark")
+        assert self.val == None
         
         
 if __name__ == "__main__":

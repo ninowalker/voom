@@ -77,7 +77,6 @@ class _Bus(object):
     def _send_breadth_first(self, message, fail_on_error):
         if not hasattr(self.breadth_queue, 'msgs'):
             self.breadth_queue.msgs = []
-
         root_event = len(self.breadth_queue.msgs) == 0
         self.breadth_queue.msgs.append(message)
         if not root_event:
@@ -104,17 +103,8 @@ class _Bus(object):
                     raise
     
     def subscribe(self, message_type, callback, priority=1000):
-        handlers = None
-        if message_type == self.ALL:
-            handlers = self._global_handlers
-        elif message_type == self.ERRORS:
-            handlers = self._error_handlers
-        else:
-            assert inspect.isclass(message_type), type(message_type)
-            handlers = self._message_handlers[message_type]
-
         LOG.debug("adding subscriber %s for %s", callback, message_type)
-        
+        handlers = self._get_handlers(message_type)
         old_item = None
         for p, c in handlers: 
             if c != callback:
@@ -130,6 +120,21 @@ class _Bus(object):
             LOG.info("callback %s re-registered with new priority. old=%s, new=%s", c, p, priority)
         bisect.insort(handlers, (priority, callback))
         LOG.debug("Updated handlers: %s", handlers)
+        
+    def unsubscribe(self, message_type, callback):
+        LOG.debug("removing subscriber %s for %s", callback, message_type)
+        handlers = self._get_handlers(message_type)
+        handlers.remove(callback)
+    
+    def _get_handlers(self, message_type):
+        if message_type == self.ALL:
+            handlers = self._global_handlers
+        elif message_type == self.ERRORS:
+            handlers = self._error_handlers
+        else:
+            assert inspect.isclass(message_type), type(message_type)
+            handlers = self._message_handlers[message_type]
+        return handlers
         
     def register(self, handler, priority=1000):
         receiver_of = getattr(handler, '_receiver_of', None)
