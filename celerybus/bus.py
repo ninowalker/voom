@@ -48,10 +48,17 @@ class _Bus(object):
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
+        self._load_config=False
 
-    def loadConfig(self):
+    def loadConfig(self, defer=True):
+        """Instructs the bus to load its config before use. 
+           defer waits to load the config until use to avoid circular imports."""
         assert loader, "The bus must be setup before it can load its config."
-        loader.setup_bus(self)
+        if defer:
+            self._load_config = True
+        else:
+            loader.setup_bus(self)
+            self._load_config = False
 
     def send(self, message, fail_on_error=False):
         if self.always_eager_mode == None:
@@ -94,6 +101,9 @@ class _Bus(object):
                     raise
     
     def _send(self, message, fail_on_error, queue=None):
+        if self._load_config:
+            self.loadConfig(False)
+
         if queue == None:
             queue = heapq.merge(self._global_handlers, self._message_handlers[type(message)])
         for priority, callback in queue:
