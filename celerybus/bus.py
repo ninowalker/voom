@@ -48,13 +48,12 @@ class _Bus(object):
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
-        self.handlers_loaded = False
+
+    def loadConfig(self):
+        assert loader, "The bus must be setup before it can load its config."
+        loader.setup_bus(self)
 
     def send(self, message, fail_on_error=False):
-        if not self.handlers_loaded and loader:
-            loader.load_handlers()
-            self.handlers_loaded = True
-            
         if self.always_eager_mode == None:
             from celery import conf
             if conf.ALWAYS_EAGER:
@@ -164,7 +163,8 @@ def setup_bus(Bus):
     try:
         loader_cls = get_cls_by_name(os.environ.get('CELERYBUS_LOADER'))
     except (ValueError, ImportError, AttributeError):
-        pass
+        LOG.warning("celerybus config not found, running without a config.")
+        return
     loader = loader_cls()
-    loader.setup_bus(Bus)
+    Bus.loadConfig()
 setup_bus(Bus)
