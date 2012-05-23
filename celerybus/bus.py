@@ -83,8 +83,16 @@ class _Bus(object):
             return
 
         while len(self.breadth_queue.msgs):
-            self._send(self.breadth_queue.msgs[0], fail_on_error)
-            self.breadth_queue.msgs.pop(0)
+            try:
+                self._send(self.breadth_queue.msgs[0], fail_on_error)
+                self.breadth_queue.msgs.pop(0)
+            except:
+                try:
+                    LOG.exception(u"Failed to process message: %s", message)
+                except:
+                    LOG.exception("This is bad: can't log exception for message of type %s", type(message))
+                if fail_on_error or self.raise_errors:
+                    raise
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
