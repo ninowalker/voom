@@ -28,9 +28,10 @@ class _Bus(object):
     
     DEFAULT_TASK_KWARGS = None
     
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, default_task_kwargs=DEFAULT_TASK_KWARGS):
+    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, default_task_kwargs=DEFAULT_TASK_KWARGS, qmax=25):
         self.verbose = verbose
         self.mode = mode
+        self.qmax = qmax
 
         if raise_errors is not None:
             self.raise_errors = raise_errors
@@ -86,6 +87,9 @@ class _Bus(object):
         root_event = len(self.breadth_queue.msgs) == 0
         self.breadth_queue.msgs.append(message)
         if not root_event:
+            if len(self.breadth_queue.msgs) > self.qmax:
+                LOG.error("celerybus queue size %s > %s", len(self.breadth_queue.msgs), self.qmax)
+            LOG.debug("not root (%d items on queue), return.", len(self.breadth_queue.msgs))
             return
 
         while len(self.breadth_queue.msgs):
@@ -109,10 +113,10 @@ class _Bus(object):
         for priority, callback in queue:
             try:
                 if self.verbose:
-                    LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
+                    LOG.debug(u"invoking %s (priority=%s): %s", callback, priority, type(message))
                 callback(message)
             except Exception, ex:
-                LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
+                LOG.exception(u"Callback failed: %s. Failed to send message: %s", callback, type(message))
                 if queue != self._error_handlers:
                     # avoid a circular loop
                     self.send_error(message, callback, ex)
