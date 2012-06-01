@@ -1,13 +1,14 @@
-import bisect
 import collections
-from collections import namedtuple
-import heapq
 import inspect
 import logging
-import os
-import sys
 import threading
+import heapq
+import bisect
+import sys
 import traceback
+from collections import namedtuple
+from celery.app import app_or_default
+from celery.local import Proxy
 
 __ALL__ = ['Bus']
 
@@ -26,40 +27,29 @@ class _Bus(object):
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    DEFAULT_TASK_KWARGS = None
-    
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, default_task_kwargs=DEFAULT_TASK_KWARGS, qmax=25):
+    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, app=None):
         self.verbose = verbose
         self.mode = mode
-        self.qmax = qmax
+        self.celery_app = None
+        self.default_task_kwargs = {}
+        #self.celery_app = Proxy(app_or_default(app))
 
         if raise_errors is not None:
             self.raise_errors = raise_errors
         else:
+            # TODO
             from celery import conf
             self.raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
 
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
-        self.default_task_kwargs = default_task_kwargs or {}
     
     def resetConfig(self):
         self.breadth_queue.msgs = []
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
-        self._load_config=False
-
-    def loadConfig(self, defer=True):
-        """Instructs the bus to load its config before use. 
-           defer waits to load the config until use to avoid circular imports."""
-        assert loader, "The bus must be setup before it can load its config."
-        if defer:
-            self._load_config = True
-        else:
-            loader.setup_bus(self)
-            self._load_config = False
 
     def send(self, message, fail_on_error=False):
         if self.always_eager_mode == None:
@@ -87,36 +77,22 @@ class _Bus(object):
         root_event = len(self.breadth_queue.msgs) == 0
         self.breadth_queue.msgs.append(message)
         if not root_event:
-            if len(self.breadth_queue.msgs) > self.qmax:
-                LOG.error("celerybus queue size %s > %s", len(self.breadth_queue.msgs), self.qmax)
-            LOG.debug("not root (%d items on queue), return.", len(self.breadth_queue.msgs))
             return
 
         while len(self.breadth_queue.msgs):
-            try:
-                self._send(self.breadth_queue.msgs[0], fail_on_error)
-                self.breadth_queue.msgs.pop(0)
-            except:
-                try:
-                    LOG.exception(u"Failed to process message: %s", message)
-                except:
-                    LOG.exception("This is bad: can't log exception for message of type %s", type(message))
-                if fail_on_error or self.raise_errors:
-                    raise
+            self._send(self.breadth_queue.msgs[0], fail_on_error)
+            self.breadth_queue.msgs.pop(0)
     
     def _send(self, message, fail_on_error, queue=None):
-        if self._load_config:
-            self.loadConfig(False)
-
         if queue == None:
             queue = heapq.merge(self._global_handlers, self._message_handlers[type(message)])
         for priority, callback in queue:
             try:
                 if self.verbose:
-                    LOG.debug(u"invoking %s (priority=%s): %s", callback, priority, type(message))
+                    LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
                 callback(message)
             except Exception, ex:
-                LOG.exception(u"Callback failed: %s. Failed to send message: %s", callback, type(message))
+                LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
                 if queue != self._error_handlers:
                     # avoid a circular loop
                     self.send_error(message, callback, ex)
@@ -165,20 +141,6 @@ class _Bus(object):
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
-    
-                
+            
 Bus = _Bus()
 Bus.resetConfig()
-
-loader = None
-def setup_bus(Bus):
-    global loader
-    from celery.utils import get_cls_by_name    
-    try:
-        loader_cls = get_cls_by_name(os.environ.get('CELERYBUS_LOADER'))
-    except (ValueError, ImportError, AttributeError):
-        LOG.warning("celerybus config not found, running without a config.")
-        return
-    loader = loader_cls()
-    Bus.loadConfig()
-setup_bus(Bus)
