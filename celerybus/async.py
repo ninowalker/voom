@@ -1,14 +1,17 @@
 from celery.registry import tasks
 
+_app = None
+
+def set_app(app):
+    global _app
+    _app = app
+
 def make_async_task(func, messages, **kwargs):
-    from celerybus.bus import Bus
-    assert Bus.celery_app != None
-    task_kwargs = Bus.default_task_kwargs.copy()
-    task_kwargs.update(kwargs)
-    t = bus_task(**task_kwargs)(func)
+    assert _app != None
+    t = bus_task(**kwargs)(func)
     tasks.register(t)
     c = AsyncCallable(t, messages)
-    c.__name__ = "%_async" % func.__name__
+    c.__name__ = "%s_async" % func.__name__
     return c
 
 
@@ -17,9 +20,9 @@ class AsyncCallable(object):
         self.task = f 
         self._receiver_of = receives
         
-        
     def __call__(self, *args, **kwargs):
         self.task.delay(*args, **kwargs)
+
 
 def bus_task(*args, **kwargs):
     """Decorator to create a task class out of any callable.
@@ -50,8 +53,7 @@ def bus_task(*args, **kwargs):
             >>> refresh_feed.delay("http://example.com/rss") # Async
             <AsyncResult: 8998d0f4-da0b-4669-ba03-d5ab5ac6ad5d>
     """
-    from .bus import Bus
-    assert Bus.celery_app != None
+    assert _app != None
     kwargs.setdefault("accept_magic_kwargs", False)
-    return Bus.celery_app.task(*args, **kwargs)
+    return _app.task(*args, **kwargs)
         

@@ -7,8 +7,6 @@ import bisect
 import sys
 import traceback
 from collections import namedtuple
-from celery.app import app_or_default
-from celery.local import Proxy
 
 __ALL__ = ['Bus']
 
@@ -30,20 +28,23 @@ class _Bus(object):
     def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, app=None):
         self.verbose = verbose
         self.mode = mode
-        self.celery_app = None
         self.default_task_kwargs = {}
-        #self.celery_app = Proxy(app_or_default(app))
-
-        if raise_errors is not None:
-            self.raise_errors = raise_errors
-        else:
-            # TODO
-            from celery import conf
-            self.raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
-
+        self._raise_errors = raise_errors
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
+        
+    @property
+    def raise_errors(self):
+        if self._raise_errors is None:
+            from celery import conf
+            self._raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
+            LOG.info("defaulted raise_errors to %s (always_eager=%s)", self._raise_errors, conf.ALWAYS_EAGER)
+        return self._raise_errors
+    
+    @raise_errors.setter
+    def raise_errors(self, value):
+        self._raise_errors = value
     
     def resetConfig(self):
         self.breadth_queue.msgs = []
