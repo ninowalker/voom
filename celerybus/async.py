@@ -19,9 +19,20 @@ class AsyncCallable(object):
     def __init__(self, f, receives):
         self.task = f 
         self._receiver_of = receives
+        self._precondition = None
         
     def __call__(self, *args, **kwargs):
-        self.task.delay(*args, **kwargs)
+        if self._precondition and self._precondition(*args, **kwargs) == False:
+            LOG.debug("precondition not met for %s, skipping" % self)
+            return None
+                
+        return self.task.delay(*args, **kwargs)
+
+    def __repr__(self):
+        return "<async %s>" % repr(self.task)
+
+    def precondition(self, func):
+        self._precondition = func
 
 
 def bus_task(*args, **kwargs):
