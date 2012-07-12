@@ -1,5 +1,5 @@
 from celery.registry import tasks
-from logging
+from logging import getLogger
 
 LOG = getLogger('celerybus.bus')
 
