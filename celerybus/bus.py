@@ -54,7 +54,9 @@ class _Bus(object):
 
     @loader.setter
     def loader(self, value):
-        assert not self._loader, "Bus loader already initialized"
+        if self._loader == value:
+            return
+        assert not self._loader, "Bus loader already initialized with another value: %s" % self._loader
         self._loader = value
         self._loaded = False
         
