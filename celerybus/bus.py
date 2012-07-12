@@ -33,6 +33,8 @@ class _Bus(object):
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
         self.resetConfig()
+        self._loader = None
+        self._loaded = False
         
     @property
     def raise_errors(self):
@@ -45,14 +47,35 @@ class _Bus(object):
     @raise_errors.setter
     def raise_errors(self, value):
         self._raise_errors = value
-    
+
+    @property
+    def loader(self):
+        return self._loader
+
+    @loader.setter
+    def loader(self, value):
+        assert not self._loader, "Bus loader already initialized"
+        self._loader = value
+        self._loaded = False
+        
     def resetConfig(self):
         self.breadth_queue.msgs = []
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
+        self._loader = None
+        self._loaded = False
 
     def send(self, message, fail_on_error=False):
+        if not self._loaded and self._loader:
+            LOG.info("running loader...")
+            try:
+                self._loader()
+            except:
+                LOG.exception("Failed to run loader!")
+                return
+            finally:
+                self._loaded = True
         if self.always_eager_mode == None:
             from celery import conf
             if conf.ALWAYS_EAGER:
