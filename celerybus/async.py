@@ -1,4 +1,7 @@
 from celery.registry import tasks
+from logging
+
+LOG = getLogger('celerybus.bus')
 
 _app = None
 
