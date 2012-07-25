@@ -116,7 +116,7 @@ class _Bus(object):
             try:
                 if self.verbose:
                     LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
-                callback(message)
+                self.invoke(callback, message)
             except Exception, ex:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
                 if queue != self._error_handlers:
@@ -124,6 +124,10 @@ class _Bus(object):
                     self.send_error(message, callback, ex)
                 if fail_on_error or self.raise_errors:
                     raise
+                
+    def invoke(self, callback, message):
+        """Injection point for doing special things before or after the callback."""
+        callback(message)
     
     def subscribe(self, message_type, callback, priority=1000):
         LOG.debug("adding subscriber %s for %s", callback, message_type)
