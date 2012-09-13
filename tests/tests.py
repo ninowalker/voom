@@ -183,7 +183,69 @@ class TestBreadth(unittest.TestCase):
         Bus.subscribe(float, child3)
         Bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
+        
 
+class TestManualAsync(unittest.TestCase):
+    def setUp(self):
+        Bus.resetConfig()
+        from celery import conf
+        conf.ALWAYS_EAGER = False
+
+    def tearDown(self):
+        from celery import conf
+        conf.ALWAYS_EAGER = True
+    
+    def test1(self):
+        """Test manual asynchronous invocation of a default synchronous handler."""
+        from celery import conf
+        conf.ALWAYS_EAGER = False
+
+        msgs = []
+        @receiver(str, async=False)
+        def m(msg):
+            msgs.append(msg)
+        
+        # mangle the delay function to ensure 
+        # we invoke inband
+        m.task.delay = lambda x: msgs.append(x.upper())
+        
+        Bus.register(m)
+        Bus.send("a")
+        assert msgs == ['a']
+        msgs = []
+        
+        m('a')
+        assert msgs == ['a']
+        msgs = []
+        
+        m('a', run_async=True)
+        assert msgs == ['A'], msgs
+        msgs = []
+        
+    def test2(self):
+        """Test manual synchronous invocation of an async default handler."""
+
+        self.msgs = []
+        @receiver(str, async=True)
+        def ar(msg):
+            self.msgs.append(msg)
+        
+        # mangle the delay function to ensure 
+        # we invoke inband
+        ar.task.delay = lambda x: self.msgs.append(x.upper())
+        
+        Bus.register(ar)
+        Bus.send("a")
+        assert self.msgs == ['A']
+        self.msgs = []
+        
+        ar('a')
+        assert self.msgs == ['A']
+        self.msgs = []
+
+        ar('a', run_async=False)
+        assert self.msgs == ['a'], self.msgs
+        
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

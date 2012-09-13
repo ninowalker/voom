@@ -1,5 +1,6 @@
 from celery.registry import tasks
 from logging import getLogger
+from functools import update_wrapper
 
 LOG = getLogger('celerybus.bus')
 
@@ -9,18 +10,21 @@ def set_app(app):
     global _app
     _app = app
 
+
 def make_async_task(func, messages, **kwargs):
     assert _app != None
+    async = kwargs.pop('async', True)
     t = bus_task(**kwargs)(func)
     tasks.register(t)
-    c = AsyncCallable(t, messages)
-    c.__name__ = "%s_async" % func.__name__
+    c = AsyncCallable(t, messages, async)
+    update_wrapper(c, func)
     return c
 
 
 class AsyncCallable(object):
-    def __init__(self, f, receives):
+    def __init__(self, f, receives, run_async):
         self.task = f 
+        self._run_async = run_async
         self._receiver_of = receives
         self._precondition = None
         
@@ -28,11 +32,14 @@ class AsyncCallable(object):
         if self._precondition and self._precondition(*args, **kwargs) == False:
             LOG.debug("precondition not met for %s, skipping" % self)
             return None
-                
-        return self.task.delay(*args, **kwargs)
+        if kwargs.pop('run_async', self._run_async):  
+            return self.task.delay(*args, **kwargs)
+        return self.task(*args, **kwargs)
 
     def __repr__(self):
-        return "<async %s>" % repr(self.task)
+        if self._run_async:
+            return "<async %s>" % repr(self.task)
+        return repr(self.task)
 
     def precondition(self, func):
         self._precondition = func
