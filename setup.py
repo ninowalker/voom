@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name = "celerybus",
-    version = "0.0.1",
+    version = "0.0.2",
     author = "Nino Walker",
     author_email = "nino.walker@gmail.com",
     description = ("A message bus implementation on top of the celery task distribution framework."),
@@ -14,7 +14,7 @@ setup(
     license = "BSD",
     packages=['celerybus'],
     long_description=read('README'),
-    install_requires=['celery>=2.5.1',],
+    install_requires=['celery>=2.5,<3.0',],
     test_suite="tests",
     classifiers=[
         "License :: OSI Approved :: BSD License",
