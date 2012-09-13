@@ -4,16 +4,20 @@ Created on Mar 30, 2012
 @author: nino
 '''
 import os
-from celerybus.transient import TransientSubscriber
-os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
+from celerybus.async import set_app
+from celery import Celery
 
 import unittest
 from celerybus import Bus
-from celerybus.consumer import MessageConsumer, consumes, AsyncConsumer
 from celerybus.decorators import receiver
 
-
+# setup celery for testing
 Bus.verbose = True
+
+celery = Celery()
+celery.config_from_object('tests.celeryconfig', False)
+celery.set_current()
+set_app(celery)
 
 class TestBasic(unittest.TestCase):
     
@@ -152,29 +156,6 @@ class TestErrorQueue(unittest.TestCase):
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
         
-    def test2(self):                
-        Bus.resetConfig()
-        msgs = []
-                 
-        @AsyncConsumer
-        class FailConsumer(MessageConsumer):
-            """My docs"""            
-            @consumes(int)
-            def passes(self, v):
-                msgs.append(1)
-                pass
-
-            @consumes(int)
-            def fails(self, msg):
-                raise Exception(str(msg))
-        
-        Bus.register(FailConsumer)
-        Bus.subscribe(Bus.ERRORS, lambda m: msgs.append(m))
-        Bus.send(1)
-        assert len(msgs) == 2
-        assert msgs[1][0] == 1
-        assert "1" in str(msgs[1][2])
-
 
 class TestBreadth(unittest.TestCase):
     def test1(self):
@@ -203,68 +184,6 @@ class TestBreadth(unittest.TestCase):
         Bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
 
-class TestConsumers(unittest.TestCase):
-    def test1(self):
-        Bus.resetConfig()
-        self._test1 = False
-        this = self
-        class AConsumer(MessageConsumer):
-            @consumes(int)
-            def handleInt(self, msg):
-                assert type(msg) == int
-                this._test1 = True
-                print "got int"
-                
-        Bus.register(AConsumer())
-        Bus.send(1)
-        assert this._test1
-        
-    def test2(self):                
-        Bus.resetConfig()
-        self._test2 = False
-        this = self
-         
-        @AsyncConsumer
-        class BConsumer(MessageConsumer):
-            """My docs"""
-            max_retries = 2
-            serializer = 'json'
-            
-            @consumes(int)
-            def handleInt(self, msg):
-                assert type(msg) == int
-                this._test2 = True
-
-            @consumes(str)
-            def handleStr(self, msg):
-                assert type(msg) == str
-                this._test2 = msg
-        
-        assert BConsumer.task.max_retries == 2
-        assert BConsumer.task.serializer == 'json'
-        
-        Bus.register(BConsumer)
-        Bus.send(1)
-        assert this._test2
-        
-        Bus.send(str("x"))
-        assert this._test2 == "x"
-        
-class TestTransient(unittest.TestCase):
-    def test1(self):
-        Bus.resetConfig()
-        self.val = None
-        def testo(msg):
-            self.val = msg
-            
-        TransientSubscriber(Bus, testo, str)
-        Bus.send("bark")
-        assert self.val == "bark"
-        self.val = None
-        del testo
-        Bus.send("bark")
-        assert self.val == None
-        
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
