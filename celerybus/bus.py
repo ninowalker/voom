@@ -8,13 +8,12 @@ import sys
 import traceback
 from collections import namedtuple
 from contextlib import contextmanager
-from celerybus.envelopes import RequestContext, MessageEnvelope
+from celerybus.envelopes import RequestContext, MessageEnvelope,\
+    InvocationFailure
 
 __ALL__ = ['Bus']
 
 LOG = logging.getLogger(__name__)
-
-InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
 
 
 class _Bus(object):
@@ -100,8 +99,10 @@ class _Bus(object):
         context = traceback.format_stack()[::-1]
         while "/celerybus/" in context[0]:
             context.pop(0)
-        failure = InvocationFailure(message, exception, tb, context)
-        self._send(failure, False, queue=self._error_handlers)
+        failure = InvocationFailure(message.body, exception, tb, context)
+        # TODO copy request?
+        env = MessageEnvelope(failure, message.request) 
+        self._send(env, False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
         if not hasattr(self.breadth_queue, 'msgs'):
@@ -117,7 +118,7 @@ class _Bus(object):
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
-            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message)])
+            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message.body)])
         for priority, callback in queue:
             try:
                 if self.verbose:
@@ -133,7 +134,6 @@ class _Bus(object):
                 
     def invoke(self, callback, message):
         """Injection point for doing special things before or after the callback."""
-        
         with self.use_context(message.request):
             callback(message.body)
     
@@ -182,7 +182,10 @@ class _Bus(object):
             
     @property
     def request(self):
-        return self.request_local.stack[0]
+        try:
+            return self.request_local.stack[0]
+        except IndexError:
+            return None
     
     @contextmanager
     def use_context(self, request_ctx):

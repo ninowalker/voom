@@ -3,7 +3,6 @@ Created on Mar 30, 2012
 
 @author: nino
 '''
-import os
 from celerybus.async import set_app
 from celery import Celery
 
@@ -146,7 +145,7 @@ class TestErrorQueue(unittest.TestCase):
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
-        assert failure.message == "cows"
+        assert failure.message == "cows", failure
         assert len(failure.invocation_context)
         # ensure no recursion
         msgs = []
@@ -207,7 +206,7 @@ class TestManualAsync(unittest.TestCase):
         
         # mangle the delay function to ensure 
         # we invoke inband
-        m.task.delay = lambda x: msgs.append(x.upper())
+        m.task.delay = lambda x, **kwargs: msgs.append(x.upper())
         
         Bus.register(m)
         Bus.send("a")
@@ -232,7 +231,7 @@ class TestManualAsync(unittest.TestCase):
         
         # mangle the delay function to ensure 
         # we invoke inband
-        ar.task.delay = lambda x: self.msgs.append(x.upper())
+        ar.task.delay = lambda x, **kwargs: self.msgs.append(x.upper())
         
         Bus.register(ar)
         Bus.send("a")
@@ -246,6 +245,86 @@ class TestManualAsync(unittest.TestCase):
         ar('a', run_async=False)
         assert self.msgs == ['a'], self.msgs
         
+        
+class TestPreconditions(unittest.TestCase):    
+    def test1(self):
+        Bus.resetConfig()
+        self.msgs = []
+        @receiver(str, async=False)
+        def m2x(msg):
+            self.msgs.append(msg)
+        
+        def pre(s):
+            return s == 'cow'
+        
+        m2x.precondition(pre)
+        
+        m2x('moo')
+        assert not self.msgs
+        m2x('cow')
+        assert self.msgs == ['cow'], self.msgs
+        
+
+class TestHeaders(unittest.TestCase):
+    def test1(self):
+        Bus.resetConfig()
+        
+        self.header = None
+        
+        @receiver(str, async=False)
+        def add_header(msg):
+            print "adding", msg
+            Bus.request.add_header('X-Stuff', msg)
+
+        @receiver(str, async=False)
+        def read_header(msg):
+            print vars(Bus.request)
+            self.header = Bus.request['X-Stuff']
+
+        Bus.register(add_header, Bus.HIGH_PRIORITY)
+        Bus.register(read_header)
+        
+        Bus.send('s')
+        assert self.header == 's'
+        
+    def test2(self):
+        Bus.resetConfig()
+        self.headers = []
+        
+        @receiver(str, async=False)
+        def add_header2(msg):
+            Bus.request.add_header('X-Stuff', msg)
+
+        @receiver(str, async=False)
+        def read_header2(msg):
+            self.headers.append(Bus.request['X-Stuff'])
+            if msg == 'a':
+                Bus.send('b')
+
+        @receiver(str, async=False)
+        def read_header3(msg):
+            self.headers.append(Bus.request['X-Stuff'])
+            if msg == 'a':
+                Bus.send('c')
+
+        Bus.register(add_header2, Bus.HIGH_PRIORITY)
+        Bus.register(read_header2)
+        Bus.register(read_header3)
+        
+        Bus.send('a')
+        assert "".join(self.headers) == 'aabbcc', self.headers
+    
+class TestSettings(unittest.TestCase):
+    def test1(self):
+        Bus.raise_errors = Bus.raise_errors
+        Bus.loader = Bus.loader
+        
+        def loader():
+            self.x = True
+        
+        Bus.loader = loader
+        Bus.send('s')
+        assert self.x
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
