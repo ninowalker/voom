@@ -11,19 +11,30 @@ def set_app(app):
     _app = app
 
 
+def _get_bus():
+    from celery.bus import Bus
+    return Bus
+
+
 def make_async_task(func, messages, **kwargs):
     assert _app != None
-    async = kwargs.pop('async', True)
-    t = bus_task(**kwargs)(func)
+    const_args = {'run_async': kwargs.pop('async', True)}
+    
+    def _wrapped_func(*args, **kwargs):
+        with _get_bus().use_context(kwargs.pop('request')):
+            func(*args, **kwargs['kwargs'])
+            
+    _f = update_wrapper(_wrapped_func, func)
+    t = bus_task(**kwargs)(_f)
     tasks.register(t)
-    c = AsyncCallable(t, messages, async)
+    c = AsyncCallable(t, messages, **const_args)
     update_wrapper(c, func)
     return c
 
 
 class AsyncCallable(object):
-    def __init__(self, f, receives, run_async):
-        self.task = f 
+    def __init__(self, f, receives, run_async=True):
+        self.task = f
         self._run_async = run_async
         self._receiver_of = receives
         self._precondition = None
@@ -32,7 +43,8 @@ class AsyncCallable(object):
         if self._precondition and self._precondition(*args, **kwargs) == False:
             LOG.debug("precondition not met for %s, skipping" % self)
             return None
-        if kwargs.pop('run_async', self._run_async):  
+        kwargs = dict(kwargs=kwargs, request=_get_bus().request)
+        if kwargs.pop('run_async', self._run_async):
             return self.task.delay(*args, **kwargs)
         return self.task(*args, **kwargs)
 
@@ -43,7 +55,7 @@ class AsyncCallable(object):
 
     def precondition(self, func):
         self._precondition = func
-
+        
 
 def bus_task(*args, **kwargs):
     """Decorator to create a task class out of any callable.

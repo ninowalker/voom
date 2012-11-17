@@ -7,12 +7,15 @@ import bisect
 import sys
 import traceback
 from collections import namedtuple
+from contextlib import contextmanager
+from celerybus.envelopes import RequestContext, MessageEnvelope
 
 __ALL__ = ['Bus']
 
 LOG = logging.getLogger(__name__)
 
 InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
+
 
 class _Bus(object):
     ALL = "ALL"
@@ -32,6 +35,8 @@ class _Bus(object):
         self._raise_errors = raise_errors
         self.always_eager_mode = None
         self.breadth_queue = threading.local()
+        self.request_local = threading.local()
+        self.request_local.stack = []
         self.resetConfig()
         self._loader = None
         self._loaded = False
@@ -68,7 +73,8 @@ class _Bus(object):
         self._loader = None
         self._loaded = False
 
-    def send(self, message, fail_on_error=False):
+    def send(self, body, fail_on_error=False, headers=None):
+        message = MessageEnvelope(body, RequestContext(headers))
         if not self._loaded and self._loader:
             LOG.info("running loader...")
             try:
@@ -127,7 +133,9 @@ class _Bus(object):
                 
     def invoke(self, callback, message):
         """Injection point for doing special things before or after the callback."""
-        callback(message)
+        
+        with self.use_context(message.request):
+            callback(message.body)
     
     def subscribe(self, message_type, callback, priority=1000):
         LOG.debug("adding subscriber %s for %s", callback, message_type)
@@ -171,6 +179,19 @@ class _Bus(object):
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
+            
+    @property
+    def request(self):
+        return self.request_local.stack[0]
+    
+    @contextmanager
+    def use_context(self, request_ctx):
+        self.request_local.stack.insert(0, request_ctx)
+        try:
+            yield
+        finally:
+            self.request_local.stack.pop(0)
+
             
 Bus = _Bus()
 Bus.resetConfig()
