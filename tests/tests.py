@@ -87,10 +87,13 @@ class TestBasic(unittest.TestCase):
         assert foo_async.task.app.conf.CELERY_ALWAYS_EAGER
             
         Bus.register(foo_async)
+        Bus.register(foo_async) # handle already registered
         Bus.send("x", fail_on_error=True)
         assert self._ack == "x"
         Bus.send(1)
         assert self._ack == 1
+        
+        Bus.unsubscribe(str, foo_async)
         
 class TestPriority(unittest.TestCase):
     def test1(self):

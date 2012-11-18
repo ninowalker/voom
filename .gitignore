@@ -4,3 +4,5 @@
 .pydevproject
 celerybus.egg-info
 build
+.coverage
+cover

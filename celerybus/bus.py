@@ -159,7 +159,11 @@ class _Bus(object):
     def unsubscribe(self, message_type, callback):
         LOG.debug("removing subscriber %s for %s", callback, message_type)
         handlers = self._get_handlers(message_type)
-        handlers.remove(callback)
+        for priority, cb in handlers:
+            if cb == callback:               
+                handlers.remove((priority, callback))
+                return
+        raise ValueError("callback not found")
     
     def _get_handlers(self, message_type):
         if message_type == self.ALL:
@@ -173,9 +177,6 @@ class _Bus(object):
         
     def register(self, handler, priority=1000):
         receiver_of = getattr(handler, '_receiver_of', None)
-        if not receiver_of:
-            if hasattr(handler, '__class__'):
-                receiver_of = getattr(handler.__class__, '_receiver_of', None)
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
