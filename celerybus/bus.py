@@ -8,8 +8,9 @@ import sys
 import traceback
 from collections import namedtuple
 from contextlib import contextmanager
-from celerybus.envelopes import RequestContext, MessageEnvelope,\
+from celerybus.context import RequestContext, MessageEnvelope,\
     InvocationFailure
+from celerybus.exceptions import AbortProcessing
 
 __ALL__ = ['Bus']
 
@@ -72,17 +73,17 @@ class _Bus(object):
         self._loader = None
         self._loaded = False
 
-    def send(self, body, fail_on_error=False, headers=None):
-        message = MessageEnvelope(body, RequestContext(headers))
+    def send(self, body, fail_on_error=False, parent_context=None):
+        message = MessageEnvelope(body, RequestContext(parent_context))
         if not self._loaded and self._loader:
             LOG.info("running loader...")
             try:
                 self._loader()
+                self._loaded = True
             except:
                 LOG.exception("Failed to run loader!")
-                return
-            finally:
-                self._loaded = True
+                raise
+                
         if self.always_eager_mode == None:
             from celery import conf
             if conf.ALWAYS_EAGER:
@@ -123,7 +124,11 @@ class _Bus(object):
             try:
                 if self.verbose:
                     LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
-                self.invoke(callback, message)
+                with self.use_context(message.request):
+                    self.invoke(callback, message)
+            except AbortProcessing:
+                LOG.info("processing of %s aborted by %s", message, callback)
+                return
             except Exception, ex:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
                 if queue != self._error_handlers:
@@ -131,11 +136,14 @@ class _Bus(object):
                     self.send_error(message, callback, ex)
                 if fail_on_error or self.raise_errors:
                     raise
+        
+        for queued_msg in message.request.queued_messages:
+            LOG.info("sending queued_message")
+            self.send(queued_msg.body, fail_on_error)
                 
     def invoke(self, callback, message):
         """Injection point for doing special things before or after the callback."""
-        with self.use_context(message.request):
-            callback(message.body)
+        callback(message.body)
     
     def subscribe(self, message_type, callback, priority=1000):
         LOG.debug("adding subscriber %s for %s", callback, message_type)

@@ -267,55 +267,6 @@ class TestPreconditions(unittest.TestCase):
         m2x('cow')
         assert self.msgs == ['cow'], self.msgs
         
-
-class TestHeaders(unittest.TestCase):
-    def test1(self):
-        Bus.resetConfig()
-        
-        self.header = None
-        
-        @receiver(str, async=False)
-        def add_header(msg):
-            print "adding", msg
-            Bus.request.add_header('X-Stuff', msg)
-
-        @receiver(str, async=False)
-        def read_header(msg):
-            print vars(Bus.request)
-            self.header = Bus.request['X-Stuff']
-
-        Bus.register(add_header, Bus.HIGH_PRIORITY)
-        Bus.register(read_header)
-        
-        Bus.send('s')
-        assert self.header == 's'
-        
-    def test2(self):
-        Bus.resetConfig()
-        self.headers = []
-        
-        @receiver(str, async=False)
-        def add_header2(msg):
-            Bus.request.add_header('X-Stuff', msg)
-
-        @receiver(str, async=False)
-        def read_header2(msg):
-            self.headers.append(Bus.request['X-Stuff'])
-            if msg == 'a':
-                Bus.send('b')
-
-        @receiver(str, async=False)
-        def read_header3(msg):
-            self.headers.append(Bus.request['X-Stuff'])
-            if msg == 'a':
-                Bus.send('c')
-
-        Bus.register(add_header2, Bus.HIGH_PRIORITY)
-        Bus.register(read_header2)
-        Bus.register(read_header3)
-        
-        Bus.send('a')
-        assert "".join(self.headers) == 'aabbcc', self.headers
     
 class TestSettings(unittest.TestCase):
     def test1(self):
