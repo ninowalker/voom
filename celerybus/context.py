@@ -28,6 +28,8 @@ class RequestContext(object):
                         self.add_header(h, _v)
                 else:
                     self.add_header(h, val)
+        if parent:
+            self.add_header("Parent", parent.headers['ID'][0])
         self._queued_messages = []
         self._context = {}
         
@@ -53,7 +55,6 @@ class RequestContext(object):
         """Adds a header; multiple headers of the same type can be added."""
         if type(value) not in (str, unicode, int, float, bool, types.NoneType):
             raise ValueError("Only scalar types are allowed as headers (%s)" % type(value))
-        print self._headers, self._headers[key], value
         self._headers[key].append(value)
         
     def set_context(self, key, value):
