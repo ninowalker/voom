@@ -15,7 +15,7 @@ setup(
     packages=['celerybus'],
     long_description=read('README'),
     install_requires=['celery>=2.5,<3.0',],
-    setup_requires=['nose>=1.0', 'sqlalchemy', 'coverage'],
+    setup_requires=['nose>=1.0', 'sqlalchemy', 'coverage', 'nosexcover'],
     test_suite = 'nose.collector',
     classifiers=[
         "License :: OSI Approved :: BSD License",
