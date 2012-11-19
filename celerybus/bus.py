@@ -74,8 +74,8 @@ class _Bus(object):
         self._loaded = False
 
     def send(self, body, fail_on_error=False, parent_context=None):
-        if not parent_context:
-            parent_context = self.request
+        #if not parent_context:
+        #    parent_context = self.request
         message = MessageEnvelope(body, RequestContext(parent_context))
         if not self._loaded and self._loader:
             LOG.info("running loader...")
@@ -141,7 +141,7 @@ class _Bus(object):
         
         for queued_msg in message.request.queued_messages:
             LOG.info("sending queued_message")
-            self.send(queued_msg.body, fail_on_error)
+            self.send(queued_msg.body, fail_on_error, message.request)
                 
     def invoke(self, callback, env):
         """Injection point for doing special things before or after the callback."""
