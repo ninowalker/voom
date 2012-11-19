@@ -3,12 +3,16 @@ Created on Mar 30, 2012
 
 @author: nino
 '''
-from celerybus.async import set_app
+from celerybus.async import set_celery_app
 from celery import Celery
 
 import unittest
-from celerybus import Bus
 from celerybus.decorators import receiver
+from celerybus.bus import DefaultBus
+from celerybus import set_default_bus
+
+Bus = DefaultBus()
+set_default_bus(Bus)
 
 # setup celery for testing
 Bus.verbose = True
@@ -16,7 +20,7 @@ Bus.verbose = True
 celery = Celery()
 celery.config_from_object('tests.celeryconfig', False)
 celery.set_current()
-set_app(celery)
+set_celery_app(celery)
 
 class TestBasic(unittest.TestCase):
     

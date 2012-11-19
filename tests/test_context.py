@@ -4,10 +4,13 @@ Created on Nov 18, 2012
 @author: nino
 '''
 import unittest
-from celerybus.bus import Bus
 from celerybus.decorators import receiver
 from celerybus.context import RequestContext
+from celerybus.bus import DefaultBus
+from celerybus import set_default_bus
 
+Bus = DefaultBus()
+set_default_bus(Bus)
 
 class TestHeaders(unittest.TestCase):
     def test_access(self):

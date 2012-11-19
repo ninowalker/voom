@@ -1,27 +1,23 @@
 from celery.registry import tasks
 from logging import getLogger
 from functools import update_wrapper
+from celerybus import get_current_bus
 
 LOG = getLogger('celerybus.bus')
 
 _app = None
 
-def set_app(app):
+def set_celery_app(app):
     global _app
     _app = app
-
-
-def _get_bus():
-    from celerybus.bus import Bus
-    return Bus
-
+    
 
 def make_async_task(func, messages, **kwargs):
     assert _app != None
     const_args = {'run_async': kwargs.pop('async', True)}
     
     def _wrapped_func(*args, **kwargs):
-        with _get_bus().use_context(kwargs.pop('request')):
+        with get_current_bus().use_context(kwargs.pop('request')):
             return func(*args, **kwargs['kwargs'])
     
     update_wrapper(_wrapped_func, func)
@@ -47,7 +43,7 @@ class AsyncCallable(object):
             else:
                 LOG.debug("precondition met for %s", self)
         async = kwargs.pop('run_async', self._run_async)
-        kwargs = dict(kwargs=kwargs, request=_get_bus().request)
+        kwargs = dict(kwargs=kwargs, request=get_current_bus().request)
         if async:
             return self.task.delay(*args, **kwargs)
         return self.task(*args, **kwargs)
