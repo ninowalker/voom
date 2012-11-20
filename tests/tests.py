@@ -10,22 +10,25 @@ import unittest
 from celerybus.decorators import receiver
 from celerybus.bus import DefaultBus
 from celerybus import set_default_bus
+from nose.tools import assert_raises
+from celerybus.context import RequestContext
 
-Bus = DefaultBus()
-set_default_bus(Bus)
 
-# setup celery for testing
-Bus.verbose = True
+class BaseTest(unittest.TestCase):
+    def setUp(self):                
+        self.bus = DefaultBus(verbose=True)
+        set_default_bus(self.bus)
+
 
 celery = Celery()
 celery.config_from_object('tests.celeryconfig', False)
 celery.set_current()
 set_celery_app(celery)
 
-class TestBasic(unittest.TestCase):
+class TestBasic(BaseTest):
     
     def testDecorators(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         @receiver(str)
         def foo(msg):
             pass
@@ -34,7 +37,7 @@ class TestBasic(unittest.TestCase):
         assert len(foo._receiver_of) == 1
         
     def testAsyncDeco(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self._adec = None
         this = self
 
@@ -42,14 +45,14 @@ class TestBasic(unittest.TestCase):
         def foo(msg):
             this._adec = msg
         
-        Bus.register(foo)
+        self.bus.register(foo)
         
         msg = "xoxo"
-        Bus.send(msg)
+        self.bus.send(msg)
         assert self._adec == msg
         
     def testBusSend(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self.foo_ = None
         self.all_ = None
         self.obj_ = None
@@ -62,23 +65,23 @@ class TestBasic(unittest.TestCase):
         def obj(msg):
             self.obj_ = msg
         
-        Bus.subscribe(str, foo)
-        Bus.subscribe(object, obj)
-        Bus.subscribe(Bus.ALL, glob)
+        self.bus.subscribe(str, foo)
+        self.bus.subscribe(object, obj)
+        self.bus.subscribe(self.bus.ALL, glob)
         
         msg = "msg"
-        Bus.send(msg)
+        self.bus.send(msg)
         assert self.foo_ == msg
         assert self.all_ == msg
         assert self.obj_ == None
         mobj = object()
-        Bus.send(mobj)
+        self.bus.send(mobj)
         assert self.obj_ == mobj
         assert self.foo_ == msg
         assert self.all_ == mobj
 
     def testBusRegister(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self._ack = None
         this = self
         
@@ -90,53 +93,53 @@ class TestBasic(unittest.TestCase):
 
         assert foo_async.task.app.conf.CELERY_ALWAYS_EAGER
             
-        Bus.register(foo_async)
-        Bus.register(foo_async) # handle already registered
-        Bus.send("x", fail_on_error=True)
+        self.bus.register(foo_async)
+        self.bus.register(foo_async) # handle already registered
+        self.bus.send("x", fail_on_error=True)
         assert self._ack == "x"
-        Bus.send(1)
+        self.bus.send(1)
         assert self._ack == 1
         
-        Bus.unsubscribe(str, foo_async)
+        self.bus.unsubscribe(str, foo_async)
         
-class TestPriority(unittest.TestCase):
+class TestPriority(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
-        Bus.subscribe(str, lambda s: msgs.append(1), priority=Bus.HIGH_PRIORITY)
+        self.bus.resetConfig()
+        self.bus.verbose = True
+        self.bus.subscribe(str, lambda s: msgs.append(1), priority=self.bus.HIGH_PRIORITY)
         
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1], msgs
         msgs = []
 
-        Bus.subscribe(str, lambda s: msgs.append(3), priority=Bus.LOW_PRIORITY)
+        self.bus.subscribe(str, lambda s: msgs.append(3), priority=self.bus.LOW_PRIORITY)
         
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1, 3], msgs
         msgs = []
 
-        Bus.subscribe(str, lambda s: msgs.append(2))
-        Bus.send("frackle")
+        self.bus.subscribe(str, lambda s: msgs.append(2))
+        self.bus.send("frackle")
         assert msgs == [1, 2, 3], msgs
         
         def hi(s):
             return msgs.append(0)
-        Bus.subscribe(str, hi, priority=Bus.LOW_PRIORITY+1)
+        self.bus.subscribe(str, hi, priority=self.bus.LOW_PRIORITY+1)
         msgs = []
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1, 2, 3, 0], msgs
-        Bus.subscribe(str, hi, priority=0)
+        self.bus.subscribe(str, hi, priority=0)
         msgs = []
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [0, 1, 2, 3], msgs
 
 
-class TestErrorQueue(unittest.TestCase):
+class TestErrorQueue(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
+        self.bus.resetConfig()
+        self.bus.verbose = True
         
         class FancyException(Exception): pass
         
@@ -146,9 +149,9 @@ class TestErrorQueue(unittest.TestCase):
         def catch(m):
             msgs.append(m)
             
-        Bus.subscribe(Bus.ERRORS, catch, 0)
-        Bus.subscribe(str, fail)
-        Bus.send("cows")
+        self.bus.subscribe(self.bus.ERRORS, catch, 0)
+        self.bus.subscribe(str, fail)
+        self.bus.send("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
@@ -156,26 +159,26 @@ class TestErrorQueue(unittest.TestCase):
         assert len(failure.invocation_context)
         # ensure no recursion
         msgs = []
-        Bus.subscribe(Bus.ERRORS, fail, 0)
-        Bus.send("cows")
+        self.bus.subscribe(self.bus.ERRORS, fail, 0)
+        self.bus.send("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
         
 
-class TestBreadth(unittest.TestCase):
+class TestBreadth(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
+        self.bus.resetConfig()
+        self.bus.verbose = True
         
         def parent(s):
             msgs.append("parent")
-            Bus.send(1)
+            self.bus.send(1)
             
         def child1(i):
             msgs.append("c1")
-            Bus.send(1.1)
+            self.bus.send(1.1)
 
         def child2(i):
             msgs.append("c2")
@@ -183,19 +186,19 @@ class TestBreadth(unittest.TestCase):
         def child3(f):
             msgs.append("c3")
         
-        Bus.subscribe(str, parent)
-        Bus.subscribe(int, child1, priority=Bus.HIGH_PRIORITY)
-        Bus.subscribe(int, child2, priority=Bus.LOW_PRIORITY)
-        Bus.subscribe(float, child3)
-        Bus.send("x")
+        self.bus.subscribe(str, parent)
+        self.bus.subscribe(int, child1, priority=self.bus.HIGH_PRIORITY)
+        self.bus.subscribe(int, child2, priority=self.bus.LOW_PRIORITY)
+        self.bus.subscribe(float, child3)
+        self.bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
         
 
-class TestManualAsync(unittest.TestCase):
+class TestManualAsync(BaseTest):
     def setUp(self):
-        Bus.resetConfig()
         from celery import conf
         conf.ALWAYS_EAGER = False
+        super(TestManualAsync, self).setUp()
 
     def tearDown(self):
         from celery import conf
@@ -215,8 +218,8 @@ class TestManualAsync(unittest.TestCase):
         # we invoke inband
         m.task.delay = lambda x, **kwargs: msgs.append(x.upper())
         
-        Bus.register(m)
-        Bus.send("a")
+        self.bus.register(m)
+        self.bus.send("a")
         assert msgs == ['a']
         msgs = []
         
@@ -240,8 +243,8 @@ class TestManualAsync(unittest.TestCase):
         # we invoke inband
         ar.task.delay = lambda x, **kwargs: self.msgs.append(x.upper())
         
-        Bus.register(ar)
-        Bus.send("a")
+        self.bus.register(ar)
+        self.bus.send("a")
         assert self.msgs == ['A']
         self.msgs = []
         
@@ -253,9 +256,9 @@ class TestManualAsync(unittest.TestCase):
         assert self.msgs == ['a'], self.msgs
         
         
-class TestPreconditions(unittest.TestCase):    
+class TestPreconditions(BaseTest):    
     def test1(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self.msgs = []
         @receiver(str, async=False)
         def m2x(msg):
@@ -272,17 +275,40 @@ class TestPreconditions(unittest.TestCase):
         assert self.msgs == ['cow'], self.msgs
         
     
-class TestSettings(unittest.TestCase):
+class TestSettings(BaseTest):
     def test1(self):
-        Bus.raise_errors = Bus.raise_errors
-        Bus.loader = Bus.loader
+        self.bus.raise_errors = self.bus.raise_errors
+        self.bus.loader = self.bus.loader
         
         def loader():
             self.x = True
         
-        Bus.loader = loader
-        Bus.send('s')
+        self.bus.loader = loader
+        self.bus.send('s')
         assert self.x
+        
+class TestRaiseErrors(BaseTest):
+    def test1(self):
+        self.bus.raise_errors = True
+        
+        @receiver(str, async=False)
+        def thrower(m):
+            raise ValueError(m)
+        self.bus.register(thrower)
+        
+        assert_raises(ValueError, self.bus.send, "s")
+        self.bus.raise_errors = False
+        
+        self.bus.send("xxx") # no error
+        r = RequestContext()
+        with assert_raises(ValueError):
+            self.bus.send("yyy", fail_on_error=True, request_context=r)
+            print r.__dict__
+            
+    def test_unsubscribe(self):
+        with assert_raises(ValueError):
+            self.bus.unsubscribe(str, map)
+        
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

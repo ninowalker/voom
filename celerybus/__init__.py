@@ -11,5 +11,6 @@ def get_current_bus():
 
 
 def set_default_bus(bus):
+    """Set to provide a global bus singleton."""
     global _bus
     _bus = bus

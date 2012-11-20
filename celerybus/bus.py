@@ -55,6 +55,7 @@ class DefaultBus(object):
     @property
     def raise_errors(self):
         if self._raise_errors is None:
+            # lazy evaluation so that we ensure that celery is properly loaded.
             from celery import conf
             self._raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
             LOG.info("defaulted raise_errors to %s (always_eager=%s, propagate=%s)", 
@@ -67,20 +68,24 @@ class DefaultBus(object):
 
     @property
     def loader(self):
+        """A callable that will discover all the handlers for this bus. Defaults to None."""
         return self._loader
 
     @loader.setter
     def loader(self, value):
         if self._loader == value:
             return
-        assert not self._loader, "Bus loader already initialized with another value: %s" % self._loader
+        if self._loader:
+            raise AssertionError("Bus loader already initialized with another value: %s" % self._loader)
         self._loader = value
         self._loaded = False
         
-    def send(self, body, fail_on_error=False, parent_context=None):
-        #if not parent_context:
-        #    parent_context = self.request
-        message = MessageEnvelope(body, RequestContext(parent_context))
+    def send(self, body, fail_on_error=False, request_context=None):
+        if not request_context:
+            parent_context = self.request if self.request else None            
+            request_context = RequestContext(parent=parent_context)
+            
+        message = MessageEnvelope(body, request_context)
         if not self._loaded and self._loader:
             LOG.info("running loader...")
             try:
@@ -111,8 +116,10 @@ class DefaultBus(object):
             return
 
         while len(self.state.queued):
-            self._send(self.state.queued[0], fail_on_error)
-            self.state.queued.pop(0)
+            try:
+                self._send(self.state.queued[0], fail_on_error)
+            finally:
+                self.state.queued.pop(0)
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
@@ -123,20 +130,25 @@ class DefaultBus(object):
                     LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
                 with self.use_context(message.request):
                     self.invoke(callback, message)
+                message.request.add_header("Processed-By", repr(callback))
             except AbortProcessing:
                 LOG.info("processing of %s aborted by %s", message, callback)
+                message.request.add_header("Aborted-By", repr(callback))
                 return
             except Exception, ex:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
+                message.request.add_header("Error", "%s - %s" % (repr(callback), ex))
+                if fail_on_error or self.raise_errors:
+                    raise
+                
                 if queue != self._error_handlers:
                     # avoid a circular loop
                     self.send_error(message, callback, ex)
-                if fail_on_error or self.raise_errors:
-                    raise
         
-        for queued_msg in message.request.queued_messages:
-            LOG.info("sending queued_message")
-            self.send(queued_msg.body, fail_on_error, message.request)
+        with self.use_context(message.request):
+            for queued_msg in message.request.queued_messages:
+                LOG.info("sending queued_message")
+                self.send(queued_msg.body, fail_on_error)
                 
     def invoke(self, callback, env):
         """Injection point for doing special things before or after the callback."""
