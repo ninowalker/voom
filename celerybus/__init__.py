@@ -1,6 +1,6 @@
 import threading
 
-__version__ = "0.0.2"
+__version__ = "0.9.0"
 
 #: global active bus
 _bus = None

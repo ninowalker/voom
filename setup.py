@@ -6,10 +6,10 @@ def read(fname):
 
 setup(
     name = "celerybus",
-    version = "0.0.2",
+    version = "0.9.0",
     author = "Nino Walker",
     author_email = "nino.walker@gmail.com",
-    description = ("A message bus implementation on top of the celery task distribution framework."),
+    description = ("A synchronous/asynchronous message bus implementation on top of the celery task distribution framework."),
     url='https://github.com/Livefyre/celerybus',
     license = "BSD",
     packages=['celerybus'],
