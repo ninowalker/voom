@@ -1,42 +1,61 @@
 from celery.registry import tasks
 from logging import getLogger
+from functools import update_wrapper
+from celerybus import get_current_bus
 
 LOG = getLogger('celerybus.bus')
 
 _app = None
 
-def set_app(app):
+def set_celery_app(app):
     global _app
     _app = app
+    
 
 def make_async_task(func, messages, **kwargs):
     assert _app != None
-    t = bus_task(**kwargs)(func)
+    const_args = {'run_async': kwargs.pop('async', True)}
+    
+    def _wrapped_func(*args, **kwargs):
+        with get_current_bus().use_context(kwargs.pop('request')):
+            return func(*args, **kwargs['kwargs'])
+    
+    update_wrapper(_wrapped_func, func)
+    t = bus_task(**kwargs)(_wrapped_func)
     tasks.register(t)
-    c = AsyncCallable(t, messages)
-    c.__name__ = "%s_async" % func.__name__
+    c = AsyncCallable(t, messages, **const_args)
+    update_wrapper(c, func)
     return c
 
 
 class AsyncCallable(object):
-    def __init__(self, f, receives):
-        self.task = f 
+    def __init__(self, f, receives, run_async=True):
+        self.task = f
+        self._run_async = run_async
         self._receiver_of = receives
         self._precondition = None
         
     def __call__(self, *args, **kwargs):
-        if self._precondition and self._precondition(*args, **kwargs) == False:
-            LOG.debug("precondition not met for %s, skipping" % self)
-            return None
-                
-        return self.task.delay(*args, **kwargs)
+        if self._precondition:
+            if self._precondition(*args, **kwargs) == False:
+                LOG.debug("precondition not met for %s, skipping", self)
+                return None
+            else:
+                LOG.debug("precondition met for %s", self)
+        async = kwargs.pop('run_async', self._run_async)
+        kwargs = dict(kwargs=kwargs, request=get_current_bus().request)
+        if async:
+            return self.task.delay(*args, **kwargs)
+        return self.task(*args, **kwargs)
 
     def __repr__(self):
-        return "<async %s>" % repr(self.task)
+        if self._run_async:
+            return "<async %s>" % repr(self.task)
+        return repr(self.task)
 
     def precondition(self, func):
         self._precondition = func
-
+        
 
 def bus_task(*args, **kwargs):
     """Decorator to create a task class out of any callable.

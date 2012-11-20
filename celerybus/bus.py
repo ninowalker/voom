@@ -6,42 +6,60 @@ import heapq
 import bisect
 import sys
 import traceback
-from collections import namedtuple
-
-__ALL__ = ['Bus']
+from contextlib import contextmanager
+from celerybus.context import RequestContext, MessageEnvelope,\
+    InvocationFailure
+from celerybus.exceptions import AbortProcessing
 
 LOG = logging.getLogger(__name__)
 
-InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
+class _TLS(threading.local):
+    _queued = None
+    _context_stack = None
+    
+    @property
+    def context_stack(self):
+        if self._context_stack is None:
+            self._context_stack = []
+        return self._context_stack
 
-class _Bus(object):
-    ALL = "ALL"
-    ERRORS = "ERRORS"
-    BREADTH_FIRST = "breadth_first"
-    DEPTH_FIRST = "depth_first"
+    @property
+    def queued(self):
+        if self._queued is None:
+            self._queued = []
+        return self._queued
+
+
+class DefaultBus(object):
+    ALL = object()
+    ERRORS = object()
     
     LOW_PRIORITY = 10000
     MEDIUM_PRIORITY = 1000
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    def __init__(self, verbose=False, always_eager_mode=BREADTH_FIRST, mode=BREADTH_FIRST, raise_errors=None, app=None):
-        self.verbose = verbose
-        self.mode = mode
-        self.default_task_kwargs = {}
+    def __init__(self, verbose=False, raise_errors=None):
+        self.state = _TLS()
+        self._verbose = verbose
         self._raise_errors = raise_errors
-        self.always_eager_mode = None
-        self.breadth_queue = threading.local()
         self.resetConfig()
+    
+    def resetConfig(self):
+        self._global_handlers = []
+        self._error_handlers = []
+        self._message_handlers = collections.defaultdict(list)
         self._loader = None
         self._loaded = False
         
     @property
     def raise_errors(self):
         if self._raise_errors is None:
+            # lazy evaluation so that we ensure that celery is properly loaded.
             from celery import conf
             self._raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
-            LOG.info("defaulted raise_errors to %s (always_eager=%s)", self._raise_errors, conf.ALWAYS_EAGER)
+            LOG.info("defaulted raise_errors to %s (always_eager=%s, propagate=%s)", 
+                     self._raise_errors, conf.ALWAYS_EAGER, conf.EAGER_PROPAGATES_EXCEPTIONS)
         return self._raise_errors
     
     @raise_errors.setter
@@ -50,42 +68,34 @@ class _Bus(object):
 
     @property
     def loader(self):
+        """A callable that will discover all the handlers for this bus. Defaults to None."""
         return self._loader
 
     @loader.setter
     def loader(self, value):
         if self._loader == value:
             return
-        assert not self._loader, "Bus loader already initialized with another value: %s" % self._loader
+        if self._loader:
+            raise AssertionError("Bus loader already initialized with another value: %s" % self._loader)
         self._loader = value
         self._loaded = False
         
-    def resetConfig(self):
-        self.breadth_queue.msgs = []
-        self._global_handlers = []
-        self._error_handlers = []
-        self._message_handlers = collections.defaultdict(list)
-        self._loader = None
-        self._loaded = False
-
-    def send(self, message, fail_on_error=False):
+    def send(self, body, fail_on_error=False, request_context=None):
+        if not request_context:
+            parent_context = self.request if self.request else None            
+            request_context = RequestContext(parent=parent_context)
+            
+        message = MessageEnvelope(body, request_context)
         if not self._loaded and self._loader:
             LOG.info("running loader...")
             try:
                 self._loader()
+                self._loaded = True
             except:
                 LOG.exception("Failed to run loader!")
-                return
-            finally:
-                self._loaded = True
-        if self.always_eager_mode == None:
-            from celery import conf
-            if conf.ALWAYS_EAGER:
-                self.mode = self.BREADTH_FIRST
-        if self.mode == self.BREADTH_FIRST:
-            self._send_breadth_first(message, fail_on_error)
-            return
-        self._send(message, fail_on_error)
+                raise
+                
+        self._send_breadth_first(message, fail_on_error)
     
     def send_error(self, message, source, exception=None, tb=None):
         if exception:
@@ -94,40 +104,55 @@ class _Bus(object):
         context = traceback.format_stack()[::-1]
         while "/celerybus/" in context[0]:
             context.pop(0)
-        failure = InvocationFailure(message, exception, tb, context)
-        self._send(failure, False, queue=self._error_handlers)
+        failure = InvocationFailure(message.body, exception, tb, context)
+        # TODO copy request?
+        env = MessageEnvelope(failure, message.request) 
+        self._send(env, False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
-        if not hasattr(self.breadth_queue, 'msgs'):
-            self.breadth_queue.msgs = []
-        root_event = len(self.breadth_queue.msgs) == 0
-        self.breadth_queue.msgs.append(message)
+        root_event = len(self.state.queued) == 0
+        self.state.queued.append(message)
         if not root_event:
             return
 
-        while len(self.breadth_queue.msgs):
-            self._send(self.breadth_queue.msgs[0], fail_on_error)
-            self.breadth_queue.msgs.pop(0)
+        while len(self.state.queued):
+            try:
+                self._send(self.state.queued[0], fail_on_error)
+            finally:
+                self.state.queued.pop(0)
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
-            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message)])
+            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message.body)])
         for priority, callback in queue:
             try:
-                if self.verbose:
+                if self._verbose:
                     LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
-                self.invoke(callback, message)
+                with self.use_context(message.request):
+                    self.invoke(callback, message)
+                message.request.add_header("Processed-By", repr(callback))
+            except AbortProcessing:
+                LOG.info("processing of %s aborted by %s", message, callback)
+                message.request.add_header("Aborted-By", repr(callback))
+                return
             except Exception, ex:
                 LOG.exception("Callback failed: %s. Failed to send message: %s", callback, message)
-                if queue != self._error_handlers:
-                    # avoid a circular loop
-                    self.send_error(message, callback, ex)
+                message.request.add_header("Error", "%s - %s" % (repr(callback), ex))
                 if fail_on_error or self.raise_errors:
                     raise
                 
-    def invoke(self, callback, message):
+                if queue != self._error_handlers:
+                    # avoid a circular loop
+                    self.send_error(message, callback, ex)
+        
+        with self.use_context(message.request):
+            for queued_msg in message.request.queued_messages:
+                LOG.info("sending queued_message")
+                self.send(queued_msg.body, fail_on_error)
+                
+    def invoke(self, callback, env):
         """Injection point for doing special things before or after the callback."""
-        callback(message)
+        callback(env.body)
     
     def subscribe(self, message_type, callback, priority=1000):
         LOG.debug("adding subscriber %s for %s", callback, message_type)
@@ -151,12 +176,16 @@ class _Bus(object):
     def unsubscribe(self, message_type, callback):
         LOG.debug("removing subscriber %s for %s", callback, message_type)
         handlers = self._get_handlers(message_type)
-        handlers.remove(callback)
+        for priority, cb in handlers:
+            if cb == callback:               
+                handlers.remove((priority, callback))
+                return
+        raise ValueError("callback not found")
     
     def _get_handlers(self, message_type):
-        if message_type == self.ALL:
+        if message_type is self.ALL:
             handlers = self._global_handlers
-        elif message_type == self.ERRORS:
+        elif message_type is self.ERRORS:
             handlers = self._error_handlers
         else:
             assert inspect.isclass(message_type), type(message_type)
@@ -165,12 +194,21 @@ class _Bus(object):
         
     def register(self, handler, priority=1000):
         receiver_of = getattr(handler, '_receiver_of', None)
-        if not receiver_of:
-            if hasattr(handler, '__class__'):
-                receiver_of = getattr(handler.__class__, '_receiver_of', None)
         assert receiver_of
         for msg_type in receiver_of:
             self.subscribe(msg_type, handler, priority)
             
-Bus = _Bus()
-Bus.resetConfig()
+    @property
+    def request(self):
+        try:
+            return self.state.context_stack[0]
+        except IndexError:
+            return None
+    
+    @contextmanager
+    def use_context(self, request_ctx):
+        self.state.context_stack.insert(0, request_ctx)
+        try:
+            yield
+        finally:
+            self.state.context_stack.pop(0)

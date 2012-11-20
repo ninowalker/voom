@@ -6,16 +6,17 @@ def read(fname):
 
 setup(
     name = "celerybus",
-    version = "0.0.1",
+    version = "0.9.0",
     author = "Nino Walker",
     author_email = "nino.walker@gmail.com",
-    description = ("A message bus implementation on top of the celery task distribution framework."),
+    description = ("A synchronous/asynchronous message bus implementation on top of the celery task distribution framework."),
     url='https://github.com/Livefyre/celerybus',
     license = "BSD",
     packages=['celerybus'],
     long_description=read('README'),
-    install_requires=['celery>=2.5.1',],
-    test_suite="tests",
+    install_requires=['celery>=2.5,<3.0',],
+    setup_requires=['nose>=1.0', 'sqlalchemy', 'coverage', 'nosexcover'],
+    test_suite = 'nose.collector',
     classifiers=[
         "License :: OSI Approved :: BSD License",
     ],

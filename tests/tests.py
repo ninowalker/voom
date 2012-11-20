@@ -3,22 +3,32 @@ Created on Mar 30, 2012
 
 @author: nino
 '''
-import os
-from celerybus.transient import TransientSubscriber
-os.environ['CELERY_CONFIG_MODULE'] = 'tests.celeryconfig'
+from celerybus.async import set_celery_app
+from celery import Celery
 
 import unittest
-from celerybus import Bus
-from celerybus.consumer import MessageConsumer, consumes, AsyncConsumer
 from celerybus.decorators import receiver
+from celerybus.bus import DefaultBus
+from celerybus import set_default_bus
+from nose.tools import assert_raises
+from celerybus.context import RequestContext
 
 
-Bus.verbose = True
+class BaseTest(unittest.TestCase):
+    def setUp(self):                
+        self.bus = DefaultBus(verbose=True)
+        set_default_bus(self.bus)
 
-class TestBasic(unittest.TestCase):
+
+celery = Celery()
+celery.config_from_object('tests.celeryconfig', False)
+celery.set_current()
+set_celery_app(celery)
+
+class TestBasic(BaseTest):
     
     def testDecorators(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         @receiver(str)
         def foo(msg):
             pass
@@ -27,7 +37,7 @@ class TestBasic(unittest.TestCase):
         assert len(foo._receiver_of) == 1
         
     def testAsyncDeco(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self._adec = None
         this = self
 
@@ -35,14 +45,14 @@ class TestBasic(unittest.TestCase):
         def foo(msg):
             this._adec = msg
         
-        Bus.register(foo)
+        self.bus.register(foo)
         
         msg = "xoxo"
-        Bus.send(msg)
+        self.bus.send(msg)
         assert self._adec == msg
         
     def testBusSend(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self.foo_ = None
         self.all_ = None
         self.obj_ = None
@@ -55,23 +65,23 @@ class TestBasic(unittest.TestCase):
         def obj(msg):
             self.obj_ = msg
         
-        Bus.subscribe(str, foo)
-        Bus.subscribe(object, obj)
-        Bus.subscribe(Bus.ALL, glob)
+        self.bus.subscribe(str, foo)
+        self.bus.subscribe(object, obj)
+        self.bus.subscribe(self.bus.ALL, glob)
         
         msg = "msg"
-        Bus.send(msg)
+        self.bus.send(msg)
         assert self.foo_ == msg
         assert self.all_ == msg
         assert self.obj_ == None
         mobj = object()
-        Bus.send(mobj)
+        self.bus.send(mobj)
         assert self.obj_ == mobj
         assert self.foo_ == msg
         assert self.all_ == mobj
 
     def testBusRegister(self):
-        Bus.resetConfig()
+        self.bus.resetConfig()
         self._ack = None
         this = self
         
@@ -83,50 +93,53 @@ class TestBasic(unittest.TestCase):
 
         assert foo_async.task.app.conf.CELERY_ALWAYS_EAGER
             
-        Bus.register(foo_async)
-        Bus.send("x", fail_on_error=True)
+        self.bus.register(foo_async)
+        self.bus.register(foo_async) # handle already registered
+        self.bus.send("x", fail_on_error=True)
         assert self._ack == "x"
-        Bus.send(1)
+        self.bus.send(1)
         assert self._ack == 1
         
-class TestPriority(unittest.TestCase):
+        self.bus.unsubscribe(str, foo_async)
+        
+class TestPriority(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
-        Bus.subscribe(str, lambda s: msgs.append(1), priority=Bus.HIGH_PRIORITY)
+        self.bus.resetConfig()
+        self.bus.verbose = True
+        self.bus.subscribe(str, lambda s: msgs.append(1), priority=self.bus.HIGH_PRIORITY)
         
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1], msgs
         msgs = []
 
-        Bus.subscribe(str, lambda s: msgs.append(3), priority=Bus.LOW_PRIORITY)
+        self.bus.subscribe(str, lambda s: msgs.append(3), priority=self.bus.LOW_PRIORITY)
         
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1, 3], msgs
         msgs = []
 
-        Bus.subscribe(str, lambda s: msgs.append(2))
-        Bus.send("frackle")
+        self.bus.subscribe(str, lambda s: msgs.append(2))
+        self.bus.send("frackle")
         assert msgs == [1, 2, 3], msgs
         
         def hi(s):
             return msgs.append(0)
-        Bus.subscribe(str, hi, priority=Bus.LOW_PRIORITY+1)
+        self.bus.subscribe(str, hi, priority=self.bus.LOW_PRIORITY+1)
         msgs = []
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [1, 2, 3, 0], msgs
-        Bus.subscribe(str, hi, priority=0)
+        self.bus.subscribe(str, hi, priority=0)
         msgs = []
-        Bus.send("frackle")
+        self.bus.send("frackle")
         assert msgs == [0, 1, 2, 3], msgs
 
 
-class TestErrorQueue(unittest.TestCase):
+class TestErrorQueue(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
+        self.bus.resetConfig()
+        self.bus.verbose = True
         
         class FancyException(Exception): pass
         
@@ -136,59 +149,36 @@ class TestErrorQueue(unittest.TestCase):
         def catch(m):
             msgs.append(m)
             
-        Bus.subscribe(Bus.ERRORS, catch, 0)
-        Bus.subscribe(str, fail)
-        Bus.send("cows")
+        self.bus.subscribe(self.bus.ERRORS, catch, 0)
+        self.bus.subscribe(str, fail)
+        self.bus.send("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
-        assert failure.message == "cows"
+        assert failure.message == "cows", failure
         assert len(failure.invocation_context)
         # ensure no recursion
         msgs = []
-        Bus.subscribe(Bus.ERRORS, fail, 0)
-        Bus.send("cows")
+        self.bus.subscribe(self.bus.ERRORS, fail, 0)
+        self.bus.send("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
         
-    def test2(self):                
-        Bus.resetConfig()
-        msgs = []
-                 
-        @AsyncConsumer
-        class FailConsumer(MessageConsumer):
-            """My docs"""            
-            @consumes(int)
-            def passes(self, v):
-                msgs.append(1)
-                pass
 
-            @consumes(int)
-            def fails(self, msg):
-                raise Exception(str(msg))
-        
-        Bus.register(FailConsumer)
-        Bus.subscribe(Bus.ERRORS, lambda m: msgs.append(m))
-        Bus.send(1)
-        assert len(msgs) == 2
-        assert msgs[1][0] == 1
-        assert "1" in str(msgs[1][2])
-
-
-class TestBreadth(unittest.TestCase):
+class TestBreadth(BaseTest):
     def test1(self):
         msgs = []
-        Bus.resetConfig()
-        Bus.verbose = True
+        self.bus.resetConfig()
+        self.bus.verbose = True
         
         def parent(s):
             msgs.append("parent")
-            Bus.send(1)
+            self.bus.send(1)
             
         def child1(i):
             msgs.append("c1")
-            Bus.send(1.1)
+            self.bus.send(1.1)
 
         def child2(i):
             msgs.append("c2")
@@ -196,74 +186,128 @@ class TestBreadth(unittest.TestCase):
         def child3(f):
             msgs.append("c3")
         
-        Bus.subscribe(str, parent)
-        Bus.subscribe(int, child1, priority=Bus.HIGH_PRIORITY)
-        Bus.subscribe(int, child2, priority=Bus.LOW_PRIORITY)
-        Bus.subscribe(float, child3)
-        Bus.send("x")
+        self.bus.subscribe(str, parent)
+        self.bus.subscribe(int, child1, priority=self.bus.HIGH_PRIORITY)
+        self.bus.subscribe(int, child2, priority=self.bus.LOW_PRIORITY)
+        self.bus.subscribe(float, child3)
+        self.bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
+        
 
-class TestConsumers(unittest.TestCase):
-    def test1(self):
-        Bus.resetConfig()
-        self._test1 = False
-        this = self
-        class AConsumer(MessageConsumer):
-            @consumes(int)
-            def handleInt(self, msg):
-                assert type(msg) == int
-                this._test1 = True
-                print "got int"
-                
-        Bus.register(AConsumer())
-        Bus.send(1)
-        assert this._test1
-        
-    def test2(self):                
-        Bus.resetConfig()
-        self._test2 = False
-        this = self
-         
-        @AsyncConsumer
-        class BConsumer(MessageConsumer):
-            """My docs"""
-            max_retries = 2
-            serializer = 'json'
-            
-            @consumes(int)
-            def handleInt(self, msg):
-                assert type(msg) == int
-                this._test2 = True
+class TestManualAsync(BaseTest):
+    def setUp(self):
+        from celery import conf
+        conf.ALWAYS_EAGER = False
+        super(TestManualAsync, self).setUp()
 
-            @consumes(str)
-            def handleStr(self, msg):
-                assert type(msg) == str
-                this._test2 = msg
-        
-        assert BConsumer.task.max_retries == 2
-        assert BConsumer.task.serializer == 'json'
-        
-        Bus.register(BConsumer)
-        Bus.send(1)
-        assert this._test2
-        
-        Bus.send(str("x"))
-        assert this._test2 == "x"
-        
-class TestTransient(unittest.TestCase):
+    def tearDown(self):
+        from celery import conf
+        conf.ALWAYS_EAGER = True
+    
     def test1(self):
-        Bus.resetConfig()
-        self.val = None
-        def testo(msg):
-            self.val = msg
+        """Test manual asynchronous invocation of a default synchronous handler."""
+        from celery import conf
+        conf.ALWAYS_EAGER = False
+
+        msgs = []
+        @receiver(str, async=False)
+        def m(msg):
+            msgs.append(msg)
+        
+        # mangle the delay function to ensure 
+        # we invoke inband
+        m.task.delay = lambda x, **kwargs: msgs.append(x.upper())
+        
+        self.bus.register(m)
+        self.bus.send("a")
+        assert msgs == ['a']
+        msgs = []
+        
+        m('a')
+        assert msgs == ['a']
+        msgs = []
+        
+        m('a', run_async=True)
+        assert msgs == ['A'], msgs
+        msgs = []
+        
+    def test2(self):
+        """Test manual synchronous invocation of an async default handler."""
+
+        self.msgs = []
+        @receiver(str, async=True)
+        def ar(msg):
+            self.msgs.append(msg)
+        
+        # mangle the delay function to ensure 
+        # we invoke inband
+        ar.task.delay = lambda x, **kwargs: self.msgs.append(x.upper())
+        
+        self.bus.register(ar)
+        self.bus.send("a")
+        assert self.msgs == ['A']
+        self.msgs = []
+        
+        ar('a')
+        assert self.msgs == ['A']
+        self.msgs = []
+
+        ar('a', run_async=False)
+        assert self.msgs == ['a'], self.msgs
+        
+        
+class TestPreconditions(BaseTest):    
+    def test1(self):
+        self.bus.resetConfig()
+        self.msgs = []
+        @receiver(str, async=False)
+        def m2x(msg):
+            self.msgs.append(msg)
+        
+        def pre(s):
+            return s == 'cow'
+        
+        m2x.precondition(pre)
+        
+        m2x('moo')
+        assert not self.msgs
+        m2x('cow')
+        assert self.msgs == ['cow'], self.msgs
+        
+    
+class TestSettings(BaseTest):
+    def test1(self):
+        self.bus.raise_errors = self.bus.raise_errors
+        self.bus.loader = self.bus.loader
+        
+        def loader():
+            self.x = True
+        
+        self.bus.loader = loader
+        self.bus.send('s')
+        assert self.x
+        
+class TestRaiseErrors(BaseTest):
+    def test1(self):
+        self.bus.raise_errors = True
+        
+        @receiver(str, async=False)
+        def thrower(m):
+            raise ValueError(m)
+        self.bus.register(thrower)
+        
+        assert_raises(ValueError, self.bus.send, "s")
+        self.bus.raise_errors = False
+        
+        self.bus.send("xxx") # no error
+        r = RequestContext()
+        with assert_raises(ValueError):
+            self.bus.send("yyy", fail_on_error=True, request_context=r)
+            print r.__dict__
             
-        TransientSubscriber(Bus, testo, str)
-        Bus.send("bark")
-        assert self.val == "bark"
-        self.val = None
-        del testo
-        Bus.send("bark")
-        assert self.val == None
+    def test_unsubscribe(self):
+        with assert_raises(ValueError):
+            self.bus.unsubscribe(str, map)
         
         
 if __name__ == "__main__":

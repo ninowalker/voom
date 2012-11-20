@@ -1,1 +1,8 @@
 *.pyc
+*.egg
+.project
+.pydevproject
+celerybus.egg-info
+build
+.coverage
+cover
