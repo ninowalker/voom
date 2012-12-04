@@ -124,6 +124,35 @@ class TestHeaders(unittest.TestCase):
         assert self.msg == None
         assert r.header("Aborted-By") != None
         
+    def test_use_context(self):
+        r = None
+        assert not self.bus.request
+        
+        # use a new context
+        with self.bus.use_context():
+            r = self.bus.request
+            assert r
+        assert not self.bus.request
+
+        # no reuse
+        with self.bus.use_context():
+            assert self.bus.request != r
+        assert not self.bus.request
+        
+        # use if provided
+        with self.bus.use_context(r):
+            assert self.bus.request == r
+        assert not self.bus.request
+
+        # test nesting
+        with self.bus.use_context(r):
+            assert self.bus.request == r
+            with self.bus.use_context():
+                assert self.bus.request == r
+                with self.bus.use_context(RequestContext()):
+                    assert self.bus.request != r
+        assert not self.bus.request
+        
         
 class TestRequestAttributes(unittest.TestCase):
     def setUp(self):

@@ -206,7 +206,12 @@ class DefaultBus(object):
             return None
     
     @contextmanager
-    def use_context(self, request_ctx):
+    def use_context(self, request_ctx=None):
+        """Provides a means setting the current request context for the active thread.
+        If request_ctx is not provided/None, the active one is used or a new one is created. 
+        """
+        if request_ctx is None:
+            request_ctx = self.request or RequestContext()
         self.state.context_stack.insert(0, request_ctx)
         try:
             yield

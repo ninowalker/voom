@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name = "celerybus",
-    version = "0.9.0",
+    version = "0.9.1",
     author = "Nino Walker",
     author_email = "nino.walker@gmail.com",
     description = ("A synchronous/asynchronous message bus implementation on top of the celery task distribution framework."),
