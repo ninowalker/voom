@@ -16,6 +16,7 @@ LOG = logging.getLogger(__name__)
 class _TLS(threading.local):
     _queued = None
     _context_stack = None
+    _current_message_frame = None
     
     @property
     def context_stack(self):
@@ -28,6 +29,12 @@ class _TLS(threading.local):
         if self._queued is None:
             self._queued = []
         return self._queued
+
+    @property
+    def current_message_frame(self):
+        if self._current_message_frame is None:
+            self._current_message_frame = []
+        return self._current_message_frame
 
 
 class DefaultBus(object):
@@ -116,10 +123,15 @@ class DefaultBus(object):
             return
 
         while len(self.state.queued):
+            msg = None
             try:
-                self._send(self.state.queued[0], fail_on_error)
+                msg = self.state.queued[0]
+                self.state.current_message_frame.insert(0, msg)
+                self._send(msg, fail_on_error)
             finally:
                 self.state.queued.pop(0)
+                if msg:
+                    self.state.current_message_frame.pop(0)
     
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
@@ -204,6 +216,10 @@ class DefaultBus(object):
             return self.state.context_stack[0]
         except IndexError:
             return None
+        
+    @property
+    def current_message(self):
+        return self.state.current_message_frame[0] if self.state.current_message_frame else None
     
     @contextmanager
     def use_context(self, request_ctx=None):

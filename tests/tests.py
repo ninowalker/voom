@@ -12,6 +12,7 @@ from celerybus.bus import DefaultBus
 from celerybus import set_default_bus
 from nose.tools import assert_raises
 from celerybus.context import RequestContext
+import sys
 
 
 class BaseTest(unittest.TestCase):
@@ -38,11 +39,15 @@ class TestBasic(BaseTest):
         
     def testAsyncDeco(self):
         self.bus.resetConfig()
+        self.bus.subscribe(self.bus.ERRORS, lambda x: sys.stdout.write(repr(x)))
         self._adec = None
         this = self
 
+        assert this.bus.current_message == None
+
         @receiver(str, async=True)
         def foo(msg):
+            assert this.bus.current_message.body == msg  
             this._adec = msg
         
         self.bus.register(foo)
@@ -50,6 +55,7 @@ class TestBasic(BaseTest):
         msg = "xoxo"
         self.bus.send(msg)
         assert self._adec == msg
+        assert this.bus.current_message == None
         
     def testBusSend(self):
         self.bus.resetConfig()
@@ -175,23 +181,28 @@ class TestBreadth(BaseTest):
         def parent(s):
             msgs.append("parent")
             self.bus.send(1)
+            assert self.bus.current_message.body == "x"
             
         def child1(i):
             msgs.append("c1")
             self.bus.send(1.1)
+            assert self.bus.current_message.body == 1
 
         def child2(i):
             msgs.append("c2")
+            assert self.bus.current_message.body == 1
             
         def child3(f):
             msgs.append("c3")
+            assert self.bus.current_message.body == 1.1
         
         self.bus.subscribe(str, parent)
         self.bus.subscribe(int, child1, priority=self.bus.HIGH_PRIORITY)
         self.bus.subscribe(int, child2, priority=self.bus.LOW_PRIORITY)
-        self.bus.subscribe(float, child3)
+        self.bus.subscribe(float, child3, priority=self.bus.HIGH_PRIORITY)
         self.bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
+        assert self.bus.current_message == None
         
 
 class TestManualAsync(BaseTest):
