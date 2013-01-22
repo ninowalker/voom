@@ -6,3 +6,4 @@ celerybus.egg-info
 build
 .coverage
 cover
+.settings
