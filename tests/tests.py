@@ -8,11 +8,13 @@ from celery import Celery
 
 import unittest
 from celerybus.decorators import receiver
-from celerybus.bus import DefaultBus
+from celerybus.bus import DefaultBus, BusError
 from celerybus import set_default_bus
 from nose.tools import assert_raises
 from celerybus.context import RequestContext
 import sys
+import celerybus.bus
+from mock import Mock
 
 
 class BaseTest(unittest.TestCase):
@@ -299,6 +301,21 @@ class TestSettings(BaseTest):
         assert self.x
         
 class TestRaiseErrors(BaseTest):
+    def setUp(self):
+        super(TestRaiseErrors, self).setUp()
+        self._log = celerybus.bus.LOG
+        
+    def set_log(self, val):
+        celerybus.bus.LOG = val
+        
+    def tearDown(self):
+        super(TestRaiseErrors, self).tearDown()
+        celerybus.bus.LOG = self._log
+    
+    def test_bad_loader(self):
+        self.bus.loader = "meow"
+        assert_raises(TypeError, self.bus.send, "s")
+    
     def test1(self):
         self.bus.raise_errors = True
         
@@ -306,6 +323,8 @@ class TestRaiseErrors(BaseTest):
         def thrower(m):
             raise ValueError(m)
         self.bus.register(thrower)
+        
+        assert self.bus.raise_errors
         
         assert_raises(ValueError, self.bus.send, "s")
         self.bus.raise_errors = False
@@ -319,7 +338,43 @@ class TestRaiseErrors(BaseTest):
     def test_unsubscribe(self):
         with assert_raises(ValueError):
             self.bus.unsubscribe(str, map)
+            
+    def test_bad_send_error(self):
+        self.bus.send_error = Mock(side_effect=Exception("barf"))
+
+        @receiver(str, async=False)
+        def thrower(m):
+            raise ValueError(m)
+
+        self.bus.register(thrower)
+
+        self.bus.send("x")
+        assert len(self.bus.state.queued) == 0
+        assert type(self.bus.send_error.call_args_list[0].call_list()[0][0][2]) == ValueError
         
+    def test_bad_send(self):
+        #self.bus.send_error = Mock(side_effect=Exception("barf"))
+        self.bus._send = Mock(side_effect=Exception("ugh"))
+        log = Mock()
+        self._exception = True
+        def exception(*args, **kwargs):
+            if self._exception:
+                #global _exception
+                self._exception = False
+                raise Exception("x")
+            pass
+        log.exception = exception #Mock(side_effect=Exception("barf"))
+        self.set_log(log)
+
+        @receiver(str, async=False)
+        def thrower(m):
+            raise ValueError(m)
+
+        self.bus.register(thrower)
+
+        with assert_raises(BusError):
+            self.bus.send("x")
+        assert len(self.bus.state.queued) == 0
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

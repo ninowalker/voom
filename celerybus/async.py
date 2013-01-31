@@ -43,7 +43,7 @@ class AsyncCallable(object):
             else:
                 LOG.debug("precondition met for %s", self)
         async = kwargs.pop('run_async', self._run_async)
-        kwargs = dict(kwargs=kwargs, request=get_current_bus().request)
+        kwargs = dict(kwargs=kwargs, request=get_current_bus().request)        
         if async:
             return self.task.delay(*args, **kwargs)
         return self.task(*args, **kwargs)

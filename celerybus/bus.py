@@ -37,6 +37,9 @@ class _TLS(threading.local):
         return self._current_message_frame
 
 
+class BusError(Exception):
+    pass
+
 class DefaultBus(object):
     ALL = object()
     ERRORS = object()
@@ -117,22 +120,42 @@ class DefaultBus(object):
         self._send(env, False, queue=self._error_handlers)
     
     def _send_breadth_first(self, message, fail_on_error):
+        # if the queue is not empty, we are in a transaction,
+        # so queue it up and it will be processed in the invoking loop.
         root_event = len(self.state.queued) == 0
         self.state.queued.append(message)
         if not root_event:
             return
 
-        while len(self.state.queued):
-            msg = None
-            try:
-                msg = self.state.queued[0]
-                self.state.current_message_frame.insert(0, msg)
-                self._send(msg, fail_on_error)
-            finally:
-                self.state.queued.pop(0)
-                if msg:
-                    self.state.current_message_frame.pop(0)
-    
+        # this must be absolutely bullet proof
+        # and we must leave this function with an 
+        # empty queue or we corrupt the bus.
+        try:
+            while len(self.state.queued):
+                msg = None
+                try:
+                    msg = self.state.queued[0]
+                    self.state.current_message_frame.insert(0, msg)
+                    self._send(msg, fail_on_error)
+                except Exception, e:
+                    if fail_on_error or self.raise_errors:
+                        raise
+                    LOG.exception("Bus error handling trap.")
+                finally:
+                    if self.state.queued:
+                        self.state.queued.pop(0)
+                    if self.state.current_message_frame:
+                        self.state.current_message_frame.pop(0)
+        except Exception, e:
+            if fail_on_error or self.raise_errors:
+                raise
+            LOG.exception("Error handling fail; trapping at _send_breadth_first")
+            raise BusError, (e, message), sys.exc_info()[2]
+        finally:
+            if self.state.queued:
+                self.state = _TLS()
+                LOG.error("Exiting send with queued item; something is terminally wrong. Cleared state, so we don't bork the process.")
+        
     def _send(self, message, fail_on_error, queue=None):
         if queue == None:
             queue = heapq.merge(self._global_handlers, self._message_handlers[type(message.body)])
@@ -153,9 +176,17 @@ class DefaultBus(object):
                 if fail_on_error or self.raise_errors:
                     raise
                 
-                if queue != self._error_handlers:
+                if queue == self._error_handlers:
                     # avoid a circular loop
-                    self.send_error(message, callback, ex)
+                    pass
+                else:
+                    # this message will push down and be
+                    # queued for sending, not immediately.
+                    try:
+                        self.send_error(message, callback, ex)
+                    except:
+                        # swallow this. Something is really bad.
+                        LOG.exception("Error handling failed!")
         
         with self.use_context(message.request):
             for queued_msg in message.request.queued_messages:
