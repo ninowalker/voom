@@ -49,7 +49,7 @@ class DefaultBus(object):
     HIGH_PRIORITY = 100
     DEFAULT_PRIORITY = MEDIUM_PRIORITY
     
-    def __init__(self, verbose=False, raise_errors=None):
+    def __init__(self, verbose=False, raise_errors=False):
         self.state = _TLS()
         self._verbose = verbose
         self._raise_errors = raise_errors
@@ -64,12 +64,6 @@ class DefaultBus(object):
         
     @property
     def raise_errors(self):
-        if self._raise_errors is None:
-            # lazy evaluation so that we ensure that celery is properly loaded.
-            from celery import conf
-            self._raise_errors = conf.ALWAYS_EAGER and conf.EAGER_PROPAGATES_EXCEPTIONS
-            LOG.info("defaulted raise_errors to %s (always_eager=%s, propagate=%s)", 
-                     self._raise_errors, conf.ALWAYS_EAGER, conf.EAGER_PROPAGATES_EXCEPTIONS)
         return self._raise_errors
     
     @raise_errors.setter

@@ -3,14 +3,12 @@ Created on Mar 30, 2012
 
 @author: nino
 '''
-from celerybus.async import set_celery_app
-from celery import Celery
 
 import unittest
 from celerybus.decorators import receiver
 from celerybus.bus import DefaultBus, BusError
 from celerybus import set_default_bus
-from nose.tools import assert_raises
+from nose.tools import assert_raises #@UnresolvedImport
 from celerybus.context import RequestContext
 import sys
 import celerybus.bus
@@ -22,11 +20,6 @@ class BaseTest(unittest.TestCase):
         self.bus = DefaultBus(verbose=True)
         set_default_bus(self.bus)
 
-
-celery = Celery()
-celery.config_from_object('tests.celeryconfig', False)
-celery.set_current()
-set_celery_app(celery)
 
 class TestBasic(BaseTest):
     
@@ -47,7 +40,7 @@ class TestBasic(BaseTest):
 
         assert this.bus.current_message == None
 
-        @receiver(str, async=True)
+        @receiver(str)
         def foo(msg):
             assert this.bus.current_message.body == msg  
             this._adec = msg
@@ -97,9 +90,6 @@ class TestBasic(BaseTest):
         def foo_async(msg):
             #print "Fail...."
             this._ack = msg
-            #return "mooo"
-
-        assert foo_async.task.app.conf.CELERY_ALWAYS_EAGER
             
         self.bus.register(foo_async)
         self.bus.register(foo_async) # handle already registered
@@ -206,74 +196,12 @@ class TestBreadth(BaseTest):
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
         assert self.bus.current_message == None
         
-
-class TestManualAsync(BaseTest):
-    def setUp(self):
-        from celery import conf
-        conf.ALWAYS_EAGER = False
-        super(TestManualAsync, self).setUp()
-
-    def tearDown(self):
-        from celery import conf
-        conf.ALWAYS_EAGER = True
-    
-    def test1(self):
-        """Test manual asynchronous invocation of a default synchronous handler."""
-        from celery import conf
-        conf.ALWAYS_EAGER = False
-
-        msgs = []
-        @receiver(str, async=False)
-        def m(msg):
-            msgs.append(msg)
-        
-        # mangle the delay function to ensure 
-        # we invoke inband
-        m.task.delay = lambda x, **kwargs: msgs.append(x.upper())
-        
-        self.bus.register(m)
-        self.bus.send("a")
-        assert msgs == ['a']
-        msgs = []
-        
-        m('a')
-        assert msgs == ['a']
-        msgs = []
-        
-        m('a', run_async=True)
-        assert msgs == ['A'], msgs
-        msgs = []
-        
-    def test2(self):
-        """Test manual synchronous invocation of an async default handler."""
-
-        self.msgs = []
-        @receiver(str, async=True)
-        def ar(msg):
-            self.msgs.append(msg)
-        
-        # mangle the delay function to ensure 
-        # we invoke inband
-        ar.task.delay = lambda x, **kwargs: self.msgs.append(x.upper())
-        
-        self.bus.register(ar)
-        self.bus.send("a")
-        assert self.msgs == ['A']
-        self.msgs = []
-        
-        ar('a')
-        assert self.msgs == ['A']
-        self.msgs = []
-
-        ar('a', run_async=False)
-        assert self.msgs == ['a'], self.msgs
-        
         
 class TestPreconditions(BaseTest):    
     def test1(self):
         self.bus.resetConfig()
         self.msgs = []
-        @receiver(str, async=False)
+        @receiver(str)
         def m2x(msg):
             self.msgs.append(msg)
         
@@ -319,7 +247,7 @@ class TestRaiseErrors(BaseTest):
     def test1(self):
         self.bus.raise_errors = True
         
-        @receiver(str, async=False)
+        @receiver(str)
         def thrower(m):
             raise ValueError(m)
         self.bus.register(thrower)
@@ -342,7 +270,7 @@ class TestRaiseErrors(BaseTest):
     def test_bad_send_error(self):
         self.bus.send_error = Mock(side_effect=Exception("barf"))
 
-        @receiver(str, async=False)
+        @receiver(str)
         def thrower(m):
             raise ValueError(m)
 
@@ -366,7 +294,7 @@ class TestRaiseErrors(BaseTest):
         log.exception = exception #Mock(side_effect=Exception("barf"))
         self.set_log(log)
 
-        @receiver(str, async=False)
+        @receiver(str)
         def thrower(m):
             raise ValueError(m)
 

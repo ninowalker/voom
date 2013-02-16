@@ -10,7 +10,7 @@ from celerybus.decorators import receiver
 from celerybus.context import RequestContext
 from celerybus.bus import DefaultBus
 from celerybus import set_default_bus, get_current_bus
-from nose.tools import assert_raises
+from nose.tools import assert_raises #@UnresolvedImport
 
 
 class TestHeaders(unittest.TestCase):
@@ -23,12 +23,12 @@ class TestHeaders(unittest.TestCase):
         
         self.header = None
         
-        @receiver(str, async=False)
+        @receiver(str)
         def add_header(msg):
             #print "adding", msg
             self.bus.request.add_header('X-Stuff', msg)
 
-        @receiver(str, async=False)
+        @receiver(str)
         def read_header(msg):
             print vars(self.bus.request)
             self.header = self.bus.request.header('X-Stuff')
@@ -43,17 +43,17 @@ class TestHeaders(unittest.TestCase):
         self.bus.resetConfig()
         self.headers = []
         
-        @receiver(str, async=False)
+        @receiver(str)
         def add_header2(msg):
             self.bus.request.add_header('X-Stuff', msg)
 
-        @receiver(str, async=False)
+        @receiver(str)
         def read_header2(msg):
             self.headers.extend(self.bus.request.headers('X-Stuff'))
             if msg == 'a':
                 self.bus.send('b')
 
-        @receiver(str, async=False)
+        @receiver(str)
         def read_header3(msg):
             self.headers.extend(self.bus.request.headers('X-Stuff'))
             if msg == 'a':
@@ -103,13 +103,13 @@ class TestHeaders(unittest.TestCase):
         assert_raises(AbortProcessing, r.cancel)
         self.msg = None
         
-        @receiver(str, async=False)
+        @receiver(str)
         def aborter(msg):
             assert get_current_bus() == self.bus
             if msg == "cancel":
                 get_current_bus().request.cancel()
         
-        @receiver(str, async=False)
+        @receiver(str)
         def not_aborter(msg):
             self.msg = msg 
         
