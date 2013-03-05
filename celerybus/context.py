@@ -6,16 +6,6 @@ MessageEnvelope = namedtuple("MessageEnvelope", ["body"])
 """A container for details about a message + failed handler"""
 InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
 
-class Headers(object):
-    ID = "id"
-    CREATED = "created"
-    PROCESS = "process"
-    HOST = "host"
-    REPLY_TO = "reply-to"
-    CORRELATION_ID = "correlation-id"
-    
-class SessionKeys(object):
-    REPLY_SEND_KWARGS = "_reply_send_kwargs"
 
 class BusState(object):
     """A thread local state object."""
@@ -43,4 +33,8 @@ class Session(dict):
     """A bag for storing session variables during a Bus.send() call."""
     def __init__(self, **kwargs):
         self.update(kwargs)
+
         
+class SessionKeys(object):
+    REPLY_SENDER = "_reply_sender"
+    REPLY_TO = "_reply_to"

@@ -8,8 +8,8 @@ import urlparse
 import redis
 from celerybus.transports import Sender
 
-class RedisSender(Sender):
-    """Sends a command to redis key.
+class RedisExec(Sender):
+    """Sends a command to a redis key.
     
     redis://username:password@host/db/<cmd>/<key>
     
@@ -37,3 +37,4 @@ class RedisSender(Sender):
         url, cmd, key = self.parse_address(address)
         client = self.get_connection(url)
         getattr(client, cmd)(key, message)
+

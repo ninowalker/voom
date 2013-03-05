@@ -5,11 +5,13 @@ Created on Feb 28, 2013
 '''
 import unittest
 import threading
-from celerybus.transports import CurrentThreadSender
+from celerybus.transports import CurrentThreadSender, UnknownSchemeError
 from celerybus.bus import DefaultBus
 import nose.tools
 from celerybus.exceptions import InvalidStateError, InvalidAddressError
 from celerybus.decorators import receiver
+from mock import patch
+from celerybus.context import SessionKeys
 
 
 class TestCurrentThreadSendDelegate(unittest.TestCase):
@@ -41,8 +43,12 @@ class TestBusReply(unittest.TestCase):
         self.bus = DefaultBus()
 
     def test_errors(self):
-        nose.tools.assert_raises(InvalidAddressError, self.bus.reply, None)
-        nose.tools.assert_raises(InvalidStateError, self.bus.set_reply_address, None, None)
+        with patch('celerybus.bus.DefaultBus.session', {}):
+            nose.tools.assert_raises(InvalidAddressError, self.bus.reply, None) #@UndefinedVariable
+
+        with patch('celerybus.bus.DefaultBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
+            assert self.bus.session == {SessionKeys.REPLY_TO: "badaddr"}, self.bus.session
+            nose.tools.assert_raises(UnknownSchemeError, self.bus.reply, None) #@UndefinedVariable
         
     def test_reply_1(self):
         @receiver(str)
@@ -50,11 +56,9 @@ class TestBusReply(unittest.TestCase):
             self.bus.reply('ponies')
         
         self.bus.register(what_is_it)
-        
-        with self.bus.use_context() as ctx:
-            self.bus.set_reply_address(CurrentThreadSender.ADDRESS, None)            
-            self.bus.reply("ponies")
-            assert self.bus.thread_replies.messages == ['ponies']
+
+        self.bus.send("meow", {SessionKeys.REPLY_TO: CurrentThreadSender.ADDRESS})
+        assert self.bus.thread_transport.pop_all() == ['ponies']
         
     def test_reply_2(self):
         @receiver(str)
@@ -64,10 +68,5 @@ class TestBusReply(unittest.TestCase):
         self.bus.register(what_is_it)
         self.bus.raise_errors = True
         
-        with self.bus.use_context() as ctx:
-            self.bus.set_reply_address(CurrentThreadSender.ADDRESS, None)
-            assert self.bus.request
-            self.bus.send("my little", request_context=ctx)
-            #self.bus.reply("ponies")
-            assert self.bus.thread_replies.messages == ['ponies']
-         
+        nose.tools.assert_raises(InvalidAddressError, self.bus.send, "my little")
+                 
