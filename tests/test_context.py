@@ -9,7 +9,6 @@ from celerybus.exceptions import AbortProcessing
 from celerybus.decorators import receiver
 from celerybus.context import Session, BusState
 from celerybus.bus import DefaultBus
-from celerybus import set_default_bus, get_current_bus
 from nose.tools import assert_raises #@UnresolvedImport
 
 
@@ -59,7 +58,6 @@ class TestSession(unittest.TestCase):
 class TestHeaders(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
-        set_default_bus(self.bus)
         
     def test_arbitrary_headers(self):
         uni = u'\u014b'
@@ -83,7 +81,6 @@ class TestHeaders(unittest.TestCase):
         
         @receiver(str)
         def aborter(msg):
-            assert get_current_bus() == self.bus
             if msg == "cancel":
                 raise AbortProcessing()
         
