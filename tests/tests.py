@@ -9,7 +9,7 @@ from celerybus.decorators import receiver
 from celerybus.bus import DefaultBus, BusError
 from celerybus import set_default_bus
 from nose.tools import assert_raises #@UnresolvedImport
-from celerybus.context import RequestContext
+from celerybus.context import Session
 import sys
 import celerybus.bus
 from mock import Mock
@@ -258,10 +258,8 @@ class TestRaiseErrors(BaseTest):
         self.bus.raise_errors = False
         
         self.bus.send("xxx") # no error
-        r = RequestContext()
         with assert_raises(ValueError):
-            self.bus.send("yyy", fail_on_error=True, request_context=r)
-            print r.__dict__
+            self.bus.send("yyy", fail_on_error=True)
             
     def test_unsubscribe(self):
         with assert_raises(ValueError):
@@ -277,7 +275,7 @@ class TestRaiseErrors(BaseTest):
         self.bus.register(thrower)
 
         self.bus.send("x")
-        assert len(self.bus.state.queued) == 0
+        assert self.bus.session is None
         assert type(self.bus.send_error.call_args_list[0].call_list()[0][0][2]) == ValueError
         
     def test_bad_send(self):
@@ -302,7 +300,28 @@ class TestRaiseErrors(BaseTest):
 
         with assert_raises(BusError):
             self.bus.send("x")
-        assert len(self.bus.state.queued) == 0
+        assert self.bus.session is None
+
+class TestDefer(unittest.TestCase):
+    def setUp(self):
+        self.bus = DefaultBus()
+        set_default_bus(self.bus)
+        
+    def test1(self):        
+        @receiver(str)
+        def h1(msg):
+            self.msgs.append(msg)
+            self.bus.defer(1)
+            
+        @receiver(int, str)
+        def h2(msg):
+            self.msgs.append(msg)
+        
+        self.msgs = []
+        self.bus.register(h1)
+        self.bus.register(h2)
+        self.bus.send("s")
+        assert self.msgs == ['s', 's', 1]
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
