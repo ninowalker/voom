@@ -6,19 +6,18 @@ Created on Mar 30, 2012
 
 import unittest
 from celerybus.decorators import receiver
-from celerybus.bus import DefaultBus, BusError
-from celerybus import set_default_bus
+from celerybus.bus import DefaultBus
 from nose.tools import assert_raises #@UnresolvedImport
 from celerybus.context import Session
 import sys
 import celerybus.bus
 from mock import Mock
+from celerybus.exceptions import BusError
 
 
 class BaseTest(unittest.TestCase):
     def setUp(self):                
         self.bus = DefaultBus(verbose=True)
-        set_default_bus(self.bus)
 
 
 class TestBasic(BaseTest):
@@ -208,7 +207,9 @@ class TestPreconditions(BaseTest):
         def pre(s):
             return s == 'cow'
         
-        m2x.precondition(pre)
+        m2x.filter(pre)
+        
+        repr(m2x)
         
         m2x('moo')
         assert not self.msgs
@@ -278,8 +279,9 @@ class TestRaiseErrors(BaseTest):
         assert self.bus.session is None
         assert type(self.bus.send_error.call_args_list[0].call_list()[0][0][2]) == ValueError
         
-    def test_bad_send(self):
-        #self.bus.send_error = Mock(side_effect=Exception("barf"))
+    def test_fatal_exception(self):
+        # hack logging so that it generates an exception
+        # and generates an exception in the send method
         self.bus._send = Mock(side_effect=Exception("ugh"))
         log = Mock()
         self._exception = True
@@ -287,9 +289,9 @@ class TestRaiseErrors(BaseTest):
             if self._exception:
                 #global _exception
                 self._exception = False
-                raise Exception("x")
+                raise TypeError("x")
             pass
-        log.exception = exception #Mock(side_effect=Exception("barf"))
+        log.exception = exception
         self.set_log(log)
 
         @receiver(str)
@@ -297,15 +299,19 @@ class TestRaiseErrors(BaseTest):
             raise ValueError(m)
 
         self.bus.register(thrower)
-
-        with assert_raises(BusError):
+        try:
             self.bus.send("x")
-        assert self.bus.session is None
+            assert False, "fail"
+        except BusError, e:
+            # ensure the cause is channeled upward
+            assert isinstance(e.cause, TypeError), e.cause
+            # ensure the state is reset
+            assert self.bus.state is None
+            
 
 class TestDefer(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
-        set_default_bus(self.bus)
         
     def test1(self):        
         @receiver(str)

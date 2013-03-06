@@ -8,32 +8,10 @@ import sys
 import traceback
 from contextlib import contextmanager
 from celerybus.context import Session, MessageEnvelope,\
-    InvocationFailure
-from celerybus.exceptions import AbortProcessing
+    InvocationFailure, BusState
+from celerybus.exceptions import AbortProcessing, BusError
 
 LOG = logging.getLogger(__name__)
-
-
-class BusError(Exception):
-    pass
-
-class BusState(object):
-    def __init__(self):
-        self.session = Session()
-        self.current_message = None
-        self._deferred = []
-        self._queued_messages = []
-
-    @property
-    def queued_messages(self):
-        while self._queued_messages:
-            yield self._queued_messages.pop()
-        
-    def is_queue_empty(self):
-        return len(self._queued_messages) == 0
-        
-    def enqueue(self, message):
-        self._queued_messages.append(message)
 
 
 class DefaultBus(object):
@@ -130,7 +108,7 @@ class DefaultBus(object):
         # and we must leave this function with an 
         # empty queue or we corrupt the bus.
         try:
-            for msg in self.state.queued_messages:
+            for msg in self.state.consume_messages():
                 self._state.state.current_message = msg
                 try:
                     self._send(msg, fail_on_error)
@@ -142,7 +120,7 @@ class DefaultBus(object):
             if fail_on_error or self.raise_errors:
                 raise
             LOG.exception("Error handling fail; trapping at _send_breadth_first")
-            raise BusError, (e, message), sys.exc_info()[2]
+            raise BusError, (message, e), sys.exc_info()[2]
         finally:
             if not self.state.is_queue_empty():
                 LOG.error("Exiting send with queued item; something is terminally wrong.")
