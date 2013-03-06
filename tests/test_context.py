@@ -8,7 +8,7 @@ import unittest
 from celerybus.exceptions import AbortProcessing
 from celerybus.decorators import receiver
 from celerybus.context import Session, BusState
-from celerybus.bus import DefaultBus
+from celerybus.bus import DefaultBus, BusPriority
 from nose.tools import assert_raises #@UnresolvedImport
 
 
@@ -90,7 +90,7 @@ class TestHeaders(unittest.TestCase):
         
         self.bus.raise_errors = True
         self.bus.register(aborter)
-        self.bus.register(not_aborter, priority=self.bus.LOW_PRIORITY)
+        self.bus.register(not_aborter, priority=BusPriority.LOW_PRIORITY)
         
         self.bus.send("foo")
         assert self.msg == "foo"

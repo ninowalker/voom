@@ -4,15 +4,16 @@ Created on Mar 30, 2012
 @author: nino
 '''
 
-import unittest
-from celerybus.decorators import receiver
-from celerybus.bus import DefaultBus
-from nose.tools import assert_raises #@UnresolvedImport
-from celerybus.context import Session
 import sys
+import unittest
+import nose.tools
 import celerybus.bus
-from mock import Mock
-from celerybus.exceptions import BusError
+
+from celerybus.decorators import receiver
+from celerybus.bus import DefaultBus, BusPriority
+from celerybus.exceptions import BusError, AbortProcessing
+from nose.tools import assert_raises #@UnresolvedImport
+from mock import Mock, patch
 
 
 class BaseTest(unittest.TestCase):
@@ -92,7 +93,7 @@ class TestBasic(BaseTest):
             
         self.bus.register(foo_async)
         self.bus.register(foo_async) # handle already registered
-        self.bus.send("x", fail_on_error=True)
+        self.bus.send("x")
         assert self._ack == "x"
         self.bus.send(1)
         assert self._ack == 1
@@ -104,13 +105,13 @@ class TestPriority(BaseTest):
         msgs = []
         self.bus.resetConfig()
         self.bus.verbose = True
-        self.bus.subscribe(str, lambda s: msgs.append(1), priority=self.bus.HIGH_PRIORITY)
+        self.bus.subscribe(str, lambda s: msgs.append(1), priority=BusPriority.HIGH_PRIORITY)
         
         self.bus.send("frackle")
         assert msgs == [1], msgs
         msgs = []
 
-        self.bus.subscribe(str, lambda s: msgs.append(3), priority=self.bus.LOW_PRIORITY)
+        self.bus.subscribe(str, lambda s: msgs.append(3), priority=BusPriority.LOW_PRIORITY)
         
         self.bus.send("frackle")
         assert msgs == [1, 3], msgs
@@ -122,7 +123,7 @@ class TestPriority(BaseTest):
         
         def hi(s):
             return msgs.append(0)
-        self.bus.subscribe(str, hi, priority=self.bus.LOW_PRIORITY+1)
+        self.bus.subscribe(str, hi, priority=BusPriority.LOW_PRIORITY+1)
         msgs = []
         self.bus.send("frackle")
         assert msgs == [1, 2, 3, 0], msgs
@@ -188,9 +189,9 @@ class TestBreadth(BaseTest):
             assert self.bus.current_message.body == 1.1
         
         self.bus.subscribe(str, parent)
-        self.bus.subscribe(int, child1, priority=self.bus.HIGH_PRIORITY)
-        self.bus.subscribe(int, child2, priority=self.bus.LOW_PRIORITY)
-        self.bus.subscribe(float, child3, priority=self.bus.HIGH_PRIORITY)
+        self.bus.subscribe(int, child1, priority=BusPriority.HIGH_PRIORITY)
+        self.bus.subscribe(int, child2, priority=BusPriority.LOW_PRIORITY)
+        self.bus.subscribe(float, child3, priority=BusPriority.HIGH_PRIORITY)
         self.bus.send("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
         assert self.bus.current_message == None
@@ -259,55 +260,90 @@ class TestRaiseErrors(BaseTest):
         self.bus.raise_errors = False
         
         self.bus.send("xxx") # no error
-        with assert_raises(ValueError):
-            self.bus.send("yyy", fail_on_error=True)
             
     def test_unsubscribe(self):
         with assert_raises(ValueError):
             self.bus.unsubscribe(str, map)
             
     def test_bad_send_error(self):
-        self.bus.send_error = Mock(side_effect=Exception("barf"))
-
         @receiver(str)
         def thrower(m):
             raise ValueError(m)
 
         self.bus.register(thrower)
 
-        self.bus.send("x")
+        with patch.object(self.bus, '_send_error') as ex:
+            ex.side_effect = ValueError
+            self.bus.send("x")
+            assert type(ex.call_args_list[0].call_list()[0][0][2]) == ValueError
         assert self.bus.session is None
-        assert type(self.bus.send_error.call_args_list[0].call_list()[0][0][2]) == ValueError
         
     def test_fatal_exception(self):
-        # hack logging so that it generates an exception
-        # and generates an exception in the send method
-        self.bus._send = Mock(side_effect=Exception("ugh"))
-        log = Mock()
-        self._exception = True
-        def exception(*args, **kwargs):
-            if self._exception:
-                #global _exception
-                self._exception = False
-                raise TypeError("x")
-            pass
-        log.exception = exception
-        self.set_log(log)
-
         @receiver(str)
         def thrower(m):
             raise ValueError(m)
 
         self.bus.register(thrower)
-        try:
-            self.bus.send("x")
-            assert False, "fail"
-        except BusError, e:
-            # ensure the cause is channeled upward
-            assert isinstance(e.cause, TypeError), e.cause
-            # ensure the state is reset
-            assert self.bus.state is None
+        self.bus._send_error = Mock(side_effect=ValueError)
+        
+        # this will swallow the error
+        self.bus.send("x")
+        
+        # now we cause problems real, hijacking
+        # LOG.exception which should never barf. 
+        with patch.object(self._log, 'exception') as fe: #@UndefinedVariable
+            fe.side_effect = TypeError
+            with nose.tools.assert_raises(BusError): #@UndefinedVariable
+                self.bus.send("x")
             
+    def test_error_abort(self):
+        self.a = 0
+        @receiver(str)
+        def thrower(m):
+            raise ValueError(m)
+
+        @receiver(str)
+        def doer(m):
+            self.a += 1
+
+        self.bus.register(doer, BusPriority.LOW_PRIORITY)
+        
+        self.bus.send("x")
+        assert self.a == 1
+        
+        self.bus.register(thrower)
+        self.bus._send_error = Mock(side_effect=AbortProcessing)
+        self.bus.send("x")
+        assert self.a == 1
+
+class TestSession(unittest.TestCase):
+    def setUp(self):
+        self.bus = DefaultBus()
+
+    def test_1(self):
+        session = {}
+        @receiver(str)
+        def doer1(s):
+            self.bus.session[s] = True
+            session.update(self.bus.session)
+            
+        self.bus.register(doer1)
+        self.bus.send("meow", dict(a=1, b=2))
+        assert session == dict(a=1, b=2, meow=True)
+        
+        session = {}
+        self.bus.send("meow")
+        assert session == dict(meow=True)
+        
+        @receiver(str)
+        def doer2(s):
+            if s == "meow":
+                self.bus.send("grr")
+        self.bus.register(doer2)
+        session = {}
+        self.bus.send("meow")
+        assert session == dict(meow=True, grr=True)
+        
 
 class TestDefer(unittest.TestCase):
     def setUp(self):
@@ -329,6 +365,3 @@ class TestDefer(unittest.TestCase):
         self.bus.send("s")
         assert self.msgs == ['s', 's', 1]
         
-if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
-    unittest.main()
