@@ -7,10 +7,53 @@ Created on Nov 18, 2012
 import unittest
 from celerybus.exceptions import AbortProcessing
 from celerybus.decorators import receiver
-from celerybus.context import Session
+from celerybus.context import Session, BusState
 from celerybus.bus import DefaultBus
 from celerybus import set_default_bus, get_current_bus
 from nose.tools import assert_raises #@UnresolvedImport
+
+
+class TestState(unittest.TestCase):
+    def test_consume(self):
+        s = BusState()
+        i = -1
+        for i, m in enumerate(s.consume_messages()):
+            pass
+        assert i == -1
+        assert s.is_queue_empty()
+        
+        s.enqueue(1)
+        s.enqueue(1)
+        
+        i = -1
+        for i, m in enumerate(s.consume_messages()):
+            pass
+        assert i == 1
+        assert s.is_queue_empty()
+        
+        i = -1
+        for i, m in enumerate(s.consume_messages()):
+            pass
+        assert i == -1
+        assert s.is_queue_empty()
+        
+    def test_consume_and_add(self):
+        s = BusState()
+        s.enqueue(1)
+        for i, m in enumerate(s.consume_messages()):
+            if i < 10:
+                s.enqueue(1)
+        assert i == 10, i
+        
+
+class TestSession(unittest.TestCase):
+    def test1(self):
+        s = Session()
+        s[1] = 2
+        assert s[1] == 2
+        assert 1 in s
+        assert s.get(1) == 2
+        assert s.get(2) == None 
 
 
 class TestHeaders(unittest.TestCase):
