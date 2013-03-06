@@ -72,6 +72,32 @@ class DefaultBus(object):
         completing all handlers without aborting."""
         self.state._deferred.append(MessageEnvelope(msg))
         
+    #def set_reply_address(self, address, correlation_id=None, **send_to_kwargs):
+    #    if not self.state:
+    #        raise InvalidStateError("no active context")
+    #    
+    #    self.request.add_header(Headers.REPLY_TO, address)
+    #    self.request.add_header(Headers.CORRELATION_ID, correlation_id)
+    #    self.request.set_context(ContextKeys.REPLY_SEND_KWARGS, send_to_kwargs)
+
+    def reply(self, message):
+        if not self.request or Headers.REPLY_TO not in self.request:
+            raise InvalidAddressError("no address provided in the header")
+        if Headers.CORRELATION_ID not in self.request:
+            raise InvalidAddressError("no correlation ID set")
+        kwargs = self.session.get(SessionKeys.REPLY_SEND_KWARGS)
+        self.send_to(self.request.header(Headers.REPLY_TO),
+                     self.request.header(Headers.CORRELATION_ID),
+                     message, 
+                     **kwargs) 
+        
+    def send_to(self, address, correlation_id, message, transport=None, encoder=None, on_error=None, on_success=None):
+        transport = transport or self.transports.get(address)
+        encoder = encoder or self.encoders.get(transport.default_encoding)
+        
+        (encoded_msg, mimetype) = encoder(message) if encoder else (message, None)
+        transport(address, encoded_msg, mimetype=mimetype, on_error=on_error, on_success=on_success)
+        
     def register(self, callback, priority=None, receiver_of=None):
         """Register a function as a handler.
         @param handler: a callable that accepts a single argument. 

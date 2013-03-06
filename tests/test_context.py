@@ -20,7 +20,7 @@ class TestState(unittest.TestCase):
             pass
         assert i == -1
         assert s.is_queue_empty()
-        
+
         s.enqueue(1)
         s.enqueue(1)
         
@@ -35,7 +35,7 @@ class TestState(unittest.TestCase):
             pass
         assert i == -1
         assert s.is_queue_empty()
-        
+
     def test_consume_and_add(self):
         s = BusState()
         s.enqueue(1)
@@ -43,8 +43,8 @@ class TestState(unittest.TestCase):
             if i < 10:
                 s.enqueue(1)
         assert i == 10, i
-        
 
+        
 class TestSession(unittest.TestCase):
     def test1(self):
         s = Session()
@@ -53,12 +53,12 @@ class TestSession(unittest.TestCase):
         assert 1 in s
         assert s.get(1) == 2
         assert s.get(2) == None 
-
-
+        
+        
 class TestHeaders(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
-        
+
     def test_arbitrary_headers(self):
         uni = u'\u014b'
         r = Session(**{'foo': 1, uni: 2})
@@ -74,7 +74,7 @@ class TestHeaders(unittest.TestCase):
         unicode(r)
         repr(r)
         print r
-                
+        
     def test_abort(self):
         self.bus.resetConfig()
         self.msg = None

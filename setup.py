@@ -17,6 +17,7 @@ setup(
     packages=['celerybus'],
     long_description=read('README'),
     setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 'mock'],
+    test_requires=['mock', 'redis', 'requests'],
     test_suite = 'nose.collector',
     classifiers=[
         "License :: OSI Approved :: BSD License",
