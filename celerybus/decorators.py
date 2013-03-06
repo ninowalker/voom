@@ -1,6 +1,7 @@
 
 from logging import getLogger
 import functools
+from celerybus.priorities import BusPriority
 
 LOG = getLogger('celerybus.bus')
 
@@ -13,10 +14,11 @@ class MessageHandlerWrapper(object):
     @param function: the message handler 
     @param receives: a list of types this handler handles. 
     """
-    def __init__(self, function, receives=None):
+    def __init__(self, function, receives=None, priority=None):
         self._func = function
         self._filter = None
         self._receiver_of = receives
+        self._priority = priority
         functools.update_wrapper(self, self._func)
         
     def __call__(self, *args, **kwargs):
@@ -36,9 +38,6 @@ class MessageHandlerWrapper(object):
 
 
 def receiver(*message_types, **kwargs):
-    """Provides an easy declaration for what a message handler
-    receives."""
+    """Provides an easy declaration for what a message handler receives."""
     wrapper = kwargs.pop('wrapper', MessageHandlerWrapper)
-    if kwargs:
-        raise ValueError("unknown arguments: %s" % kwargs.keys())
-    return functools.partial(wrapper, receives=message_types)
+    return functools.partial(wrapper, receives=message_types, **kwargs)

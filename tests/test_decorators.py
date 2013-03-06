@@ -32,7 +32,7 @@ class TestDecorator(unittest.TestCase):
         assert w(None) == 1
         
     def test_custom_wrapper(self):
-        def alt(function, receives=None):
+        def alt(function, **kwargs):
             return function
         
         w = receiver(int, str, wrapper=alt)(foo)
@@ -40,5 +40,5 @@ class TestDecorator(unittest.TestCase):
         assert not hasattr(w, '_receiver_of')
 
     def test_bad_args(self):
-        with nose.tools.assert_raises(ValueError): #@UndefinedVariable
+        with nose.tools.assert_raises(TypeError): #@UndefinedVariable
             w = receiver(int, str, async=True)(foo)
