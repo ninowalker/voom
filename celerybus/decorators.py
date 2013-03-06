@@ -5,30 +5,40 @@ import functools
 LOG = getLogger('celerybus.bus')
 
 
-class MessageHandler(object):
+class MessageHandlerWrapper(object):
+    """A wrapper object for message handling callables. It supports a filter as a
+    precondition to address the common situation where one only wants a subset of 
+    the messages of the type.
+    
+    @param function: the message handler 
+    @param receives: a list of types this handler handles. 
+    """
     def __init__(self, function, receives=None):
-        self.func = function
-        self._precondition = None
+        self._func = function
+        self._filter = None
         self._receiver_of = receives
-        functools.update_wrapper(self, self.func)
+        functools.update_wrapper(self, self._func)
         
     def __call__(self, *args, **kwargs):
-        if self._precondition:
-            if self._precondition(*args, **kwargs) == False:
-                LOG.debug("precondition not met for %s, skipping", self)
+        if self._filter:
+            if not self._filter(*args, **kwargs):
+                LOG.debug("filter not met for %s, skipping", self)
                 return None
-            LOG.debug("precondition met for %s", self)
-        return self.func(*args, **kwargs)
+            LOG.debug("filter met for %s", self)
+        return self._func(*args, **kwargs)
 
     def __repr__(self):
-        return "<MessageHandler %s>" % repr(self.func)
+        return "<MessageHandlerWrapper %s>" % repr(self._func)
     
-    def precondition(self, func):
-        self._precondition = func
+    def filter(self, func):
+        """Assign a filter to this handler."""
+        self._filter = func
 
 
-def receiver(*messages, **kwargs):
-    """Decorates a function"""
-    wrapper = kwargs.pop('wrapper', MessageHandler)
-    assert not kwargs, "Unknown arguments: %s" % kwargs
-    return functools.partial(wrapper, receives=messages)
+def receiver(*message_types, **kwargs):
+    """Provides an easy declaration for what a message handler
+    receives."""
+    wrapper = kwargs.pop('wrapper', MessageHandlerWrapper)
+    if kwargs:
+        raise ValueError("unknown arguments: %s" % kwargs.keys())
+    return functools.partial(wrapper, receives=message_types)
