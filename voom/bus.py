@@ -10,8 +10,8 @@ from voom.context import MessageEnvelope,\
     InvocationFailure, BusState, SessionKeys
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError
 from voom.priorities import BusPriority #@UnusedImport
-from voom.transports import TransportRegistry, CurrentThreadSender
-from voom.transports.codecs import EncoderRegistry
+from voom.channels import ChannelRegistry, CurrentThreadChannel
+from voom.codecs import EncoderRegistry
 
 LOG = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class DefaultBus(object):
         self._verbose = verbose
         self.raise_errors = raise_errors
         self.resetConfig()
-        self.transports = TransportRegistry()
+        self.channels = ChannelRegistry()
         self.encoders = EncoderRegistry()
     
     def resetConfig(self):
@@ -95,15 +95,15 @@ class DefaultBus(object):
         if sender:
             sender(address, message)
             return
-        transport = self.transports.get(address)
+        transport = self.channels.get(address)
         encoder = self.encoders.get(transport.default_encoding)
         
         (encoded_msg, mimetype) = encoder(message) if encoder else (message, None)
         transport(address, encoded_msg, mimetype=mimetype)
     
     @property
-    def thread_transport(self):
-        return self.transports.get(CurrentThreadSender.ADDRESS)
+    def thread_channel(self):
+        return self.channels.get(CurrentThreadChannel.ADDRESS)
         
     def register(self, callback, priority=None, receiver_of=None):
         """Register a function as a handler.

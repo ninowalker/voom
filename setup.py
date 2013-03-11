@@ -1,5 +1,5 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 from voom import __version__
 
@@ -14,7 +14,7 @@ setup(
     description = ("A python message bus that you can put 4 million volts through."),
     url='https://github.com/Livefyre/celerybus',
     license = "BSD",
-    packages=['voom'],
+    packages=find_packages(exclude=['tests']),
     long_description=read('README'),
     setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 'mock'],
     test_requires=['mock', 'redis', 'requests'],

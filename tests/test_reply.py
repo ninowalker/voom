@@ -5,7 +5,7 @@ Created on Feb 28, 2013
 '''
 import unittest
 import threading
-from voom.transports import CurrentThreadSender, UnknownSchemeError
+from voom.channels import CurrentThreadChannel, UnknownSchemeError
 from voom.bus import DefaultBus
 import nose.tools
 from voom.exceptions import InvalidStateError, InvalidAddressError
@@ -16,14 +16,14 @@ from voom.context import SessionKeys
 
 class TestCurrentThreadSendDelegate(unittest.TestCase):
     def test1(self):        
-        d = CurrentThreadSender()
+        d = CurrentThreadChannel()
         d(None, [1, 2, 3])
         assert d.messages == [[1, 2, 3]]
         assert d.pop_all() == [[1, 2, 3]]
         assert d.messages == []
 
     def test2(self):
-        d = CurrentThreadSender()
+        d = CurrentThreadChannel()
         
         def append(*args):
             d("local", args)
@@ -57,8 +57,8 @@ class TestBusReply(unittest.TestCase):
         
         self.bus.register(what_is_it)
 
-        self.bus.send("meow", {SessionKeys.REPLY_TO: CurrentThreadSender.ADDRESS})
-        assert self.bus.thread_transport.pop_all() == ['ponies']
+        self.bus.send("meow", {SessionKeys.REPLY_TO: CurrentThreadChannel.ADDRESS})
+        assert self.bus.thread_channel.pop_all() == ['ponies']
         
     def test_reply_2(self):
         @receiver(str)

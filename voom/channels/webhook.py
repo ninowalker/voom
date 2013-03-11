@@ -5,7 +5,7 @@ Created on Mar 2, 2013
 '''
 
 import requests
-from voom.transports import Sender
+from voom.channels import Sender
 
 class WebhookSender(Sender):
     default_encoding = "json"

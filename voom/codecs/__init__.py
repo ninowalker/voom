@@ -1,6 +1,6 @@
 
 class EncoderRegistry(object):
-    """Provides a mapping between address schemes and a given transport."""
+    """Provides a mapping between an encoding and the encoder."""
     def __init__(self):
         self.serializers = {None: lambda x: x}
         

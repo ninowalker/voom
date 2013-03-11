@@ -9,16 +9,16 @@ import re
 import sys
 from logging import getLogger
 
-LOG = getLogger("voom.transports")
+LOG = getLogger("voom.channels")
 
 DEFAULT = ":default"
 
 class UnknownSchemeError(ValueError): pass
 
-class TransportRegistry(object):
-    """Provides a mapping between address schemes and a given transport."""
+class ChannelRegistry(object):
+    """Provides a mapping between address schemes and a given channel."""
     def __init__(self):
-        self.transports = {CurrentThreadSender.SCHEME: CurrentThreadSender()}
+        self.channels = {CurrentThreadChannel.SCHEME: CurrentThreadChannel()}
         
     def register(self, scheme, transport):
         self.transport[scheme] = transport
@@ -26,7 +26,7 @@ class TransportRegistry(object):
     def get(self, address):
         scheme = urlparse.urlparse(address).scheme
         try:
-            return self.transports[scheme]
+            return self.channels[scheme]
         except KeyError:
             raise UnknownSchemeError("Unknown protocol scheme in address: %s" % address)
 
@@ -48,7 +48,7 @@ class TransportError(Exception):
         self.cause = cause
         
 
-class CurrentThreadSender(threading.local):
+class CurrentThreadChannel(threading.local):
     """Provides a mechanism for collecting messages in the current thread
     for later processing."""
     

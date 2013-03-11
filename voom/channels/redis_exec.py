@@ -6,7 +6,7 @@ Created on Mar 2, 2013
 import urlparse
 
 import redis
-from voom.transports import Sender
+from voom.channels import Sender
 
 class RedisExec(Sender):
     """Sends a command to a redis key.
