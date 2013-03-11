@@ -2,7 +2,7 @@
 *.egg
 .project
 .pydevproject
-celerybus.egg-info
+voom.egg-info
 build
 .coverage
 cover

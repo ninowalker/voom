@@ -5,10 +5,10 @@ Created on Nov 18, 2012
 @author: nino
 '''
 import unittest
-from celerybus.exceptions import AbortProcessing
-from celerybus.decorators import receiver
-from celerybus.context import Session, BusState
-from celerybus.bus import DefaultBus, BusPriority
+from voom.exceptions import AbortProcessing
+from voom.decorators import receiver
+from voom.context import Session, BusState
+from voom.bus import DefaultBus, BusPriority
 from nose.tools import assert_raises #@UnresolvedImport
 
 

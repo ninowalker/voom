@@ -4,7 +4,7 @@ Created on Mar 5, 2013
 @author: nino
 '''
 import unittest
-from celerybus.decorators import MessageHandlerWrapper, receiver
+from voom.decorators import MessageHandlerWrapper, receiver
 import nose.tools
 
 def foo(msg):

@@ -6,12 +6,12 @@ import heapq
 import bisect
 import sys
 import traceback
-from celerybus.context import MessageEnvelope,\
+from voom.context import MessageEnvelope,\
     InvocationFailure, BusState, SessionKeys
-from celerybus.exceptions import AbortProcessing, BusError, InvalidAddressError
-from celerybus.priorities import BusPriority #@UnusedImport
-from celerybus.transports import TransportRegistry, CurrentThreadSender
-from celerybus.transports.codecs import EncoderRegistry
+from voom.exceptions import AbortProcessing, BusError, InvalidAddressError
+from voom.priorities import BusPriority #@UnusedImport
+from voom.transports import TransportRegistry, CurrentThreadSender
+from voom.transports.codecs import EncoderRegistry
 
 LOG = logging.getLogger(__name__)
 
@@ -227,7 +227,7 @@ class DefaultBus(object):
             tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)[2:])
         # find out where send was called from:
         context = traceback.format_stack()[::-1]
-        while "/celerybus/" in context[0]:
+        while "/voom/" in context[0]:
             context.pop(0)
         
         failure = InvocationFailure(message.body, exception, tb, context[::-1])

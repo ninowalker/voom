@@ -1,9 +1,9 @@
 
 from logging import getLogger
 import functools
-from celerybus.priorities import BusPriority
+from voom.priorities import BusPriority
 
-LOG = getLogger('celerybus.bus')
+LOG = getLogger('voom.bus')
 
 
 class MessageHandlerWrapper(object):

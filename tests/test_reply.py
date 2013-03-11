@@ -5,13 +5,13 @@ Created on Feb 28, 2013
 '''
 import unittest
 import threading
-from celerybus.transports import CurrentThreadSender, UnknownSchemeError
-from celerybus.bus import DefaultBus
+from voom.transports import CurrentThreadSender, UnknownSchemeError
+from voom.bus import DefaultBus
 import nose.tools
-from celerybus.exceptions import InvalidStateError, InvalidAddressError
-from celerybus.decorators import receiver
+from voom.exceptions import InvalidStateError, InvalidAddressError
+from voom.decorators import receiver
 from mock import patch
-from celerybus.context import SessionKeys
+from voom.context import SessionKeys
 
 
 class TestCurrentThreadSendDelegate(unittest.TestCase):
@@ -43,10 +43,10 @@ class TestBusReply(unittest.TestCase):
         self.bus = DefaultBus()
 
     def test_errors(self):
-        with patch('celerybus.bus.DefaultBus.session', {}):
+        with patch('voom.bus.DefaultBus.session', {}):
             nose.tools.assert_raises(InvalidAddressError, self.bus.reply, None) #@UndefinedVariable
 
-        with patch('celerybus.bus.DefaultBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
+        with patch('voom.bus.DefaultBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
             assert self.bus.session == {SessionKeys.REPLY_TO: "badaddr"}, self.bus.session
             nose.tools.assert_raises(UnknownSchemeError, self.bus.reply, None) #@UndefinedVariable
         

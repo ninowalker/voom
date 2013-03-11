@@ -7,11 +7,11 @@ Created on Mar 30, 2012
 import sys
 import unittest
 import nose.tools
-import celerybus.bus
+import voom.bus
 
-from celerybus.decorators import receiver
-from celerybus.bus import DefaultBus, BusPriority
-from celerybus.exceptions import BusError, AbortProcessing
+from voom.decorators import receiver
+from voom.bus import DefaultBus, BusPriority
+from voom.exceptions import BusError, AbortProcessing
 from nose.tools import assert_raises #@UnresolvedImport
 from mock import Mock, patch
 
@@ -233,14 +233,14 @@ class TestSettings(BaseTest):
 class TestRaiseErrors(BaseTest):
     def setUp(self):
         super(TestRaiseErrors, self).setUp()
-        self._log = celerybus.bus.LOG
+        self._log = voom.bus.LOG
         
     def set_log(self, val):
-        celerybus.bus.LOG = val
+        voom.bus.LOG = val
         
     def tearDown(self):
         super(TestRaiseErrors, self).tearDown()
-        celerybus.bus.LOG = self._log
+        voom.bus.LOG = self._log
     
     def test_bad_loader(self):
         self.bus.loader = "meow"

@@ -5,7 +5,7 @@ Created on Mar 10, 2013
 '''
 
 import pika
-from celerybus.transports import Sender
+from voom.transports import Sender
 
 class RabbitTransport(Sender):
     def __init__(self):

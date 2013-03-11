@@ -9,7 +9,7 @@ import re
 import sys
 from logging import getLogger
 
-LOG = getLogger("celerybus.transports")
+LOG = getLogger("voom.transports")
 
 DEFAULT = ":default"
 
