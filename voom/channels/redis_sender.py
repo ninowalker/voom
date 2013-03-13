@@ -8,7 +8,7 @@ import urlparse
 import redis
 from voom.channels import Sender
 
-class RedisExec(Sender):
+class RedisChannelSender(Sender):
     """Sends a command to a redis key.
     
     redis://username:password@host/db/<cmd>/<key>

@@ -36,5 +36,13 @@ class Session(dict):
 
         
 class SessionKeys(object):
+
+    GATEWAY_EXTRAS = "_gateway_extras"
+
+    GATEWAY = "_gateway"
+
+    CORRELATION_ID = "_correlation_id"
+
+    GATEWAY_HEADERS = "_gateway_headers"
     REPLY_SENDER = "_reply_sender"
     REPLY_TO = "_reply_to"

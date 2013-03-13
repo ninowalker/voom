@@ -189,7 +189,7 @@ class DefaultBus(object):
         
     def _send_msg(self, message, queue=None):
         if queue == None:
-            queue = heapq.merge(self._global_handlers, self._message_handlers[type(message.body)])
+            queue = list(heapq.merge(self._global_handlers, self._message_handlers[type(message.body)]))
         try:
             for priority, callback in queue:
                 try:

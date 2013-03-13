@@ -14,5 +14,10 @@ class EncoderRegistry(object):
         return self.serializers[name]
 
 
+class ParseError(Exception):
+    def __init__(self, message, cause):
+        super(ParseError, self).__init__(message)
+        self.cause = cause
+
 # celery://queue/function
 # rabbitmq://username:password@host/vhost/key

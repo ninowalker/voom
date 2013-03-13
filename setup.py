@@ -16,7 +16,7 @@ setup(
     license = "BSD",
     packages=find_packages(exclude=['tests']),
     long_description=read('README'),
-    setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 'mock'],
+    setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 'mock', 'pika'],
     test_requires=['mock', 'redis', 'requests'],
     test_suite = 'nose.collector',
     classifiers=[
