@@ -7,17 +7,17 @@ from voom.context import SessionKeys
 from logging import getLogger
 import pika #@UnusedImport
 import functools
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady, \
     AMQPQueueInitialized, AMQPQueueDescriptor, AMQPChannelReady,\
-    AMQPMessageExtras
+    AMQPMessageExtras, AMQPDataReceived
 from voom.priorities import BusPriority
 import socket
-import urllib
 import threading
 from voom.channels.amqp import AMQPAddress
 import os
 import uuid
+import urlparse
 
 LOG = getLogger(__name__)
 
@@ -45,7 +45,7 @@ class AMQPGateway(object):
                                            exclusive=False,
                                            auto_delete=False)
         
-        self.listener = AMQPQueueListener(work_queues + [return_queue], self.bus, on_receive)
+        self.listener = AMQPQueueListener([return_queue] + work_queues, self.bus, on_receive)
 
         # setup the sender                                           
         self.address = AMQPAddress(connection_params,
@@ -68,6 +68,32 @@ class AMQPGateway(object):
     
     def attach(self, bus):
         bus.subscribe(GatewayShutdownCmd, self.shutdown, BusPriority.LOW_PRIORITY)
+        
+
+    def reply(self, routing_key, messages, **kwargs):
+        pass
+    
+    
+    def _receive(self, listener, body, extras):
+        properties = extras.properties
+        codec = self.supported.get_mime_codec(properties.content_type)
+        headers, msgs = codec.decode(body)
+        
+        context = {SessionKeys.GATEWAY_HEADERS: headers,
+                   SessionKeys.GATEWAY_EXTRAS: extras,
+                   }
+        
+        if properties.reply_to:
+            parts = urlparse.urlparse(properties.reply_to)
+            if parts.scheme:
+                context[SessionKeys.REPLY_TO] = parts.reply_to
+            else:
+                context[SessionKeys.RESPONDER] = functools.partial(self.reply, properties.reply_to)
+        
+        self.bus.send(msg, context.copy())
+        
+        for msg in msgs:
+            self.bus.send(msg, context.copy())
     
     def _opened(self, connection):
         self.bus.send(AMQPConnectionReady(connection))
@@ -148,11 +174,15 @@ class AMQPSender(object):
         
 
 class AMQPQueueListener(object):
-    def __init__(self, queues, event_bus, callback=None):
+    def __init__(self, queues, event_bus, callback=None, bindings=None):
         self.bus = event_bus
         self.callback = callback or self._default_callback
         self.connection = None
         self._queues = queues
+        self._bindings = defaultdict(list)
+        
+        for binding in (bindings or []):
+            self._bindings[binding.queue].append(binding)
         
         self.attach(self.bus)
         
@@ -197,28 +227,22 @@ class AMQPQueueListener(object):
     def _on_receive(self, ch, method, properties, body):
         self.channel.basic_ack(delivery_tag=method.delivery_tag)        
         LOG.info('received payload on channel %s %s, %s', method.routing_key, properties, body)
-        self.callback(self, body, AMQPMessageExtras(ch, method, properties))
+        self.callback(AMQPDataReceived(body, AMQPMessageExtras(ch, method, properties), self))
         
-    def _default_callback(self, unused, body, extras):
+    def _default_callback(self, data_event):
         context = {SessionKeys.GATEWAY_HEADERS: {},
-                   SessionKeys.GATEWAY_EXTRAS: extras}
+                   SessionKeys.GATEWAY_EXTRAS: data_event.extras}
 
-        #try:
-        #    headers, messages = self.parser(body)
-        #except ParseError:
-        #    self.bus.send(AMQPListenerMessageUnparseable(body), context)
-        #    return
-        #context[SessionKeys.AMQPListener_HEADERS] = headers
-        self.bus.send(body, context)
+        self.bus.send(data_event.body, context)
         
 def _declare_queue(channel, descriptor, callback):
+    assert isinstance(descriptor, AMQPQueueDescriptor)
     if descriptor.declare:
         channel.queue_declare(queue=descriptor.queue,
                                    callback=callback,
                                    **descriptor.declare_params)
     else:
         channel.queue_declare(queue=descriptor.queue, passive=True, callback=callback)
-
 
 def _header(s):
     return "-".join(map(str.capitalize, s.split("_")))

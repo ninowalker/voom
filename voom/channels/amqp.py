@@ -40,6 +40,8 @@ class AMQPAddress(object):
         
     @classmethod
     def parse(cls, url):
+        if not url.startswith("amqp:"):
+            raise ValueError(url)
         obj = cls(URLParameters(url))
 
         if url[0:4] == 'amqp':

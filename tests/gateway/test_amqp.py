@@ -15,6 +15,8 @@ from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady,\
 from voom.codecs import ContentCodecRegistry
 from voom.codecs.json_codec import JSONCodec
 from voom.codecs.mime_codec import MIMEMessageCodec
+from voom.context import SessionKeys
+import urlparse
 
 basicConfig()
 
@@ -105,15 +107,31 @@ class TestGateway(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
         self.msgs = []
+        self.context = None
         self.supported = ContentCodecRegistry([MIMEMessageCodec(ContentCodecRegistry([JSONCodec()]))])
         def p(x):
             LOG.warning("%s", x)
         
         self.bus.subscribe(DefaultBus.ALL, lambda x: p(x), priority=BusPriority.HIGH_PRIORITY)
 
-    def receive(self, listener, body, extras):
-        codec = self.supported.get_mime_codec(extras.properties.content_type)
-        headers, msgs = codec.decode(body)
+    def receive(self, data_event):
+        properties = data_event.extras.properties
+        print data_event.extras
+        codec = self.supported.get_mime_codec(properties.content_type)
+        headers, msgs = codec.decode(data_event.body)
+        
+        context = {SessionKeys.GATEWAY_HEADERS: headers,
+                   SessionKeys.GATEWAY_EXTRAS: data_event.extras}
+        
+        if properties.reply_to:
+            parts = urlparse.urlparse(properties.reply_to)
+            if parts.scheme:
+                context[SessionKeys.REPLY_TO] = parts.reply_to
+            else:
+                context[SessionKeys.RESPONDER] = None
+                
+        self.context = context
+        print self.context
         self.msgs.extend(msgs)
         self.bus.send(GatewayShutdownCmd())
         

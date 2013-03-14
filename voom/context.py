@@ -37,6 +37,8 @@ class Session(dict):
         
 class SessionKeys(object):
 
+    RESPONDER = "_responder"
+
     GATEWAY_EXTRAS = "_gateway_extras"
 
     GATEWAY = "_gateway"
