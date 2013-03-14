@@ -12,3 +12,4 @@ class AMQPQueueDescriptor(namedtuple('AMQPQueueDescriptor', 'queue declare decla
         return super(AMQPQueueDescriptor, cls).__new__(cls, queue, declare, kwargs)
 
 
+AMQPMessageExtras = namedtuple("AMQPMessageExtras", "channel method properties")

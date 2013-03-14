@@ -17,7 +17,7 @@ class AMQPAddress(object):
     params = None
     fragment = None
 
-    def __init__(self, connection_params):
+    def __init__(self, connection_params, **extras):
         assert isinstance(connection_params, Parameters)
         if connection_params.credentials.username:
             self.netloc = "%s:%s@%s" % (connection_params.credentials.username,
@@ -33,7 +33,10 @@ class AMQPAddress(object):
         else:
             self.path = "/%s" % connection_params.virtual_host
 
-        self.extras = {}
+        self.extras = extras
+        
+    def get(self, name, default=None):
+        return self.extras.get(name, default)
         
     @classmethod
     def parse(cls, url):

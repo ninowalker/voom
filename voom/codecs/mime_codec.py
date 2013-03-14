@@ -15,8 +15,8 @@ class MIMEMessageCodec(object):
     def supported_types(self):
         return (object, type(None))
     
-    def mime_subtype(self):
-        return self.MIME_SUBTYPE
+    def mimetypes(self):
+        return ["multipart/mixed"]
         
     def encode(self, body, headers={}):
         msg = MIMEMultipart()

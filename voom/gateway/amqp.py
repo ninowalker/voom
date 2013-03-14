@@ -8,12 +8,16 @@ from logging import getLogger
 import pika #@UnusedImport
 import functools
 from collections import namedtuple
-from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady,\
-    AMQPQueueInitialized, AMQPQueueDescriptor, AMQPChannelReady
+from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady, \
+    AMQPQueueInitialized, AMQPQueueDescriptor, AMQPChannelReady,\
+    AMQPMessageExtras
 from voom.priorities import BusPriority
 import socket
 import urllib
 import threading
+from voom.channels.amqp import AMQPAddress
+import os
+import uuid
 
 LOG = getLogger(__name__)
 
@@ -23,12 +27,13 @@ AMQPSenderReady = namedtuple("AMQPSenderReady", "sender queue")
 
 
 class AMQPGateway(object):
-    def __init__(self, 
-                 app_name, 
-                 connection_params, 
-                 work_queues, 
+    def __init__(self,
+                 app_name,
+                 connection_params,
+                 work_queues,
                  event_bus,
                  on_receive,
+                 supported_content_types,
                  accept="multipart/mixed",
                  accept_encoding="gzip"):
         self.bus = event_bus
@@ -39,16 +44,16 @@ class AMQPGateway(object):
                                            durable=False,
                                            exclusive=False,
                                            auto_delete=False)
-                                           
-                                           
-        reply_to_addr = "amqp:///?%s" % urllib.urlencode(dict(routing_key=return_queue,
-                                                              content_type=accept,
-                                                              content_encoding=accept_encoding,
-                                                              app_id=app_name))
-        
         
         self.listener = AMQPQueueListener(work_queues + [return_queue], self.bus, on_receive)
-        self.sender = AMQPSender(return_queue, reply_to_addr, self.bus)
+
+        # setup the sender                                           
+        self.address = AMQPAddress(connection_params,
+                                    routing_key=return_queue.queue,
+                                    accept=accept,
+                                    accept_encoding=accept_encoding,
+                                    app_id=app_name)        
+        self.sender = AMQPSender(return_queue, self.address, self.bus, supported_content_types)
         self.attach(self.bus)
         
     def run(self):
@@ -69,14 +74,16 @@ class AMQPGateway(object):
 
 
 class AMQPSender(object):
-    def __init__(self, return_queue, reply_to_addr, event_bus, 
-                 default_content_type="multipart/mixed", 
+    def __init__(self, return_queue, reply_to_addr, event_bus,
+                 supported_content_types,
+                 default_content_type="multipart/mixed",
                  default_encoding="gzip"):
         self.channel = None
         self.connection = None
         self.bus = event_bus
         self.return_queue = return_queue
         self.reply_to_addr = reply_to_addr
+        self.supported_content_types = supported_content_types
         self.default_encoding = default_encoding
         self.default_content_type = default_content_type
         self.attach(self.bus)
@@ -85,23 +92,35 @@ class AMQPSender(object):
         bus.subscribe(AMQPConnectionReady, self.connect)
         bus.subscribe(GatewayShutdownCmd, self.shutdown)
         
-    def send(self, message, routing_key='', exchange='', properties=None, **kwargs):
-        LOG.warning("sending %s", message)
-        if not properties:
-            properties = pika.BasicProperties(delivery_mode=2,
-                                              reply_to = self.return_queue.queue)
-        for k, v in kwargs.iteritems():
+    def send(self, address, message, **kwargs):
+        LOG.warning("sending %s to %s", message, address)
+        properties = pika.BasicProperties(delivery_mode=2,
+                                          reply_to=self.reply_to_addr.get('routing_key'))
+        extras = self.reply_to_addr.extras.copy()    
+        extras.update(kwargs)
+        
+        for k, v in extras.iteritems():
             if hasattr(properties, k):
                 setattr(properties, k, v)
-        
-        properties.content_type = properties.content_type or self.default_content_type
-        properties.content_encoding = properties.content_encoding or self.default_encoding
-        
-        #properties.content_type, body = codecs.encode((message, properties.content_type, properties.content_encoding)
-        body = message
                 
-        self.channel.basic_publish(exchange=exchange,
-                                   routing_key=routing_key,
+        if not properties.correlation_id:
+            properties.correlation_id = uuid.uuid4().hex
+        
+        properties.content_type = properties.content_type or extras['accept']
+        properties.content_encoding = properties.content_encoding or extras['accept_encoding']
+        
+        LOG.warning("properties=%s", properties)
+        
+        headers = {'From': "%s@%s" % (os.getpid(), os.uname()[1]),
+                   'To': properties.reply_to,
+                   'Reply-To-FQCS': self.reply_to_addr.unparse()}
+        headers.update({_header(k): unicode(v) for k, v in properties.__dict__.iteritems() if v is not None})
+        
+        encoder = self.supported_content_types.get_mime_codec(properties.content_type)
+        body = encoder.encode(message, headers)
+                
+        self.channel.basic_publish(exchange=address.get('exchange', ''),
+                                   routing_key=address.get('routing_key', ''),
                                    body=body,
                                    properties=properties)
         LOG.warning("sent %s", body)
@@ -120,7 +139,6 @@ class AMQPSender(object):
         self.channel = channel        
         callback = functools.partial(self._init_declared, AMQPQueueInitialized(self.return_queue))
         _declare_queue(self.channel, self.return_queue, callback)
-        
         self.bus.send(AMQPChannelReady(self.channel, self.connection, threading.current_thread()))
         
     def _init_declared(self, obj, *args):
@@ -179,7 +197,7 @@ class AMQPQueueListener(object):
     def _on_receive(self, ch, method, properties, body):
         self.channel.basic_ack(delivery_tag=method.delivery_tag)        
         LOG.info('received payload on channel %s %s, %s', method.routing_key, properties, body)
-        self.callback(self, body, dict(ch=ch, method=method, properties=properties))
+        self.callback(self, body, AMQPMessageExtras(ch, method, properties))
         
     def _default_callback(self, unused, body, extras):
         context = {SessionKeys.GATEWAY_HEADERS: {},
@@ -201,3 +219,6 @@ def _declare_queue(channel, descriptor, callback):
     else:
         channel.queue_declare(queue=descriptor.queue, passive=True, callback=callback)
 
+
+def _header(s):
+    return "-".join(map(str.capitalize, s.split("_")))

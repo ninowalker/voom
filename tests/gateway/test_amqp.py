@@ -12,6 +12,9 @@ from voom.priorities import BusPriority
 from logging import basicConfig
 from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady,\
     AMQPQueueInitialized
+from voom.codecs import ContentCodecRegistry
+from voom.codecs.json_codec import JSONCodec
+from voom.codecs.mime_codec import MIMEMessageCodec
 
 basicConfig()
 
@@ -102,20 +105,24 @@ class TestGateway(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
         self.msgs = []
-
+        self.supported = ContentCodecRegistry([MIMEMessageCodec(ContentCodecRegistry([JSONCodec()]))])
         def p(x):
             LOG.warning("%s", x)
         
         self.bus.subscribe(DefaultBus.ALL, lambda x: p(x), priority=BusPriority.HIGH_PRIORITY)
 
     def receive(self, listener, body, extras):
-        self.msgs.append(body)
+        codec = self.supported.get_mime_codec(extras.properties.content_type)
+        headers, msgs = codec.decode(body)
+        self.msgs.extend(msgs)
         self.bus.send(GatewayShutdownCmd())
         
-    def test_1(self):
+    def test_1(self):        
         queue = AMQPQueueDescriptor("gateway_test21", declare=True, exclusive=True, auto_delete=True)
-        
-        self.bus.subscribe(AMQPSenderReady, lambda x: x.sender.send("1", routing_key=x.queue))
-        g = AMQPGateway("test_gateway11", connection_params, [queue], self.bus, self.receive)
+        g = AMQPGateway("test_gateway11", connection_params, [queue], self.bus, self.receive, self.supported)
+        self.bus.subscribe(AMQPSenderReady, 
+                           lambda x: x.sender.send(g.address, [range(10), range(5)]))
         g.run()
-        assert self.msgs == ["1"]
+        assert self.msgs == [range(10), range(5)], self.msgs
+        
+        
