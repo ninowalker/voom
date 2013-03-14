@@ -16,23 +16,40 @@ import urllib
 
 LOG = getLogger(__name__)
 
-AMQPListenerReady = namedtuple("AMQPListenerReady", "listener queue")
+AMQPListenerReady = namedtuple("AMQPListenerReady", "listener queue_descriptor")
 AMQPListenerShutdown = namedtuple("AMQPListenerShutdown", "listener")
 AMQPSenderReady = namedtuple("AMQPSenderReady", "sender queue")
 
+class AMQPQueueDescriptor(namedtuple('AMQPQueueDescriptor', 'queue declare declare_params')):
+    def __new__(cls, queue, declare=False, **kwargs):
+        return super(AMQPQueueDescriptor, cls).__new__(cls, queue, declare, kwargs)
+
 
 class AMQPGateway(object):
-    def __init__(self, app_name, connection_params, work_queue, event_bus, on_receive,
+    def __init__(self, 
+                 app_name, 
+                 connection_params, 
+                 work_queues, 
+                 event_bus, 
+                 on_receive,
                  accept="multipart/mixed",
                  accept_encoding="gzip"):
         self.bus = event_bus
         self.connection_params = connection_params
-        return_queue = "%s@%s" % (app_name, socket.getfqdn())
+        return_queue = AMQPQueueDescriptor("%s@%s" % (app_name, socket.getfqdn()),
+                                           declare=True,
+                                           durable=False,
+                                           exclusive=False,
+                                           auto_delete=False)
+                                           
+                                           
         reply_to_addr = "amqp:///?%s" % urllib.urlencode(dict(routing_key=return_queue,
                                                               content_type=accept,
                                                               content_encoding=accept_encoding,
                                                               app_id=app_name))
-        self.listener = AMQPQueueListener([work_queue, return_queue], self.bus, on_receive)
+        
+        
+        self.listener = AMQPQueueListener(work_queues + [return_queue], self.bus, on_receive)
         self.sender = AMQPSender(return_queue, reply_to_addr, self.bus)
         self.attach(self.bus)
         
@@ -74,7 +91,7 @@ class AMQPSender(object):
         LOG.warning("sending %s", message)
         if not properties:
             properties = pika.BasicProperties(delivery_mode=2,
-                                              reply_to = self.return_queue)
+                                              reply_to = self.return_queue.queue)
         for k, v in kwargs.iteritems():
             if hasattr(properties, k):
                 setattr(properties, k, v)
@@ -103,15 +120,14 @@ class AMQPSender(object):
     def _init_channel(self, channel):
         LOG.warning("channel open")
         self.channel = channel
+
+        callback = functools.partial(self._init_declared, AMQPQueueInitialized(self.return_queue))
+        _declare_queue(self.channel, self.return_queue, callback)
         
-        self.channel.queue_declare(queue=self.return_queue,
-                           exclusive=False, auto_delete=False,
-                           callback=functools.partial(self._init_declared, 
-                                                      AMQPQueueInitialized(self.return_queue)))
     def _init_declared(self, obj, *args):
-        LOG.warning("created %s", obj.queue)
+        LOG.warning("created %s", obj.descriptor.queue)
         LOG.warning("sender initialized.")
-        self.bus.send(AMQPSenderReady(self, obj.queue))
+        self.bus.send(AMQPSenderReady(self, obj.descriptor.queue))
         
 
 class AMQPQueueListener(object):
@@ -150,17 +166,16 @@ class AMQPQueueListener(object):
         self.channel = obj
         self.channel.basic_qos(prefetch_count=1)        
         
-        for queue in self._queues:
-            self.channel.queue_declare(queue=queue,
-                                       exclusive=False, auto_delete=False,
-                                       callback=functools.partial(self._init_declared, 
-                                                                  AMQPQueueInitialized(queue)))
+        for desc in self._queues:
+            callback = functools.partial(self._init_declared, AMQPQueueInitialized(desc))
+            _declare_queue(self.channel, desc, callback)
+                
 
     def _init_declared(self, obj, *args):
-        self.channel.basic_consume(self._on_receive, queue=obj.queue)
-        LOG.info("subscribed to %s", obj.queue)
-        self._initialized = True
-        self.bus.send(AMQPListenerReady(self, obj.queue))
+        self.channel.basic_consume(self._on_receive, queue=obj.descriptor.queue)
+        LOG.info("subscribed to %s", obj.descriptor.queue)
+        self.bus.send(obj)
+        self.bus.send(AMQPListenerReady(self, obj.descriptor))
 
     def _on_receive(self, ch, method, properties, body):
         self.channel.basic_ack(delivery_tag=method.delivery_tag)        
@@ -178,3 +193,13 @@ class AMQPQueueListener(object):
         #    return
         #context[SessionKeys.AMQPListener_HEADERS] = headers
         self.bus.send(body, context)
+        
+def _declare_queue(channel, descriptor, callback):
+    if descriptor.declare:
+        channel.queue_declare(queue=descriptor.queue,
+                                   callback=callback,
+                                   **descriptor.declare_params)
+    else:
+        channel.queue_declare(queue=descriptor.queue, passive=True, callback=callback)
+
+    

@@ -5,11 +5,13 @@ Created on Mar 11, 2013
 '''
 import unittest
 import pika
-from voom.gateway.amqp import AMQPQueueListener, AMQPGateway, AMQPSenderReady
+from voom.gateway.amqp import AMQPQueueListener, AMQPGateway, AMQPSenderReady,\
+    AMQPQueueDescriptor
 from voom.bus import DefaultBus, LOG
 from voom.priorities import BusPriority
 from logging import basicConfig
-from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady
+from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady,\
+    AMQPQueueInitialized
 
 basicConfig()
 
@@ -58,7 +60,7 @@ class TestListener(unittest.TestCase):
     
     def send_message(self, queue, msg):
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=queue)        
+        self.channel.queue_declare(queue=queue, passive=True)        
         self.channel.basic_publish(exchange='',
                               routing_key=queue,
                               body=msg,
@@ -67,13 +69,20 @@ class TestListener(unittest.TestCase):
         print " [x] Sent %r" % (msg,)
     
     def test_1(self):
-        work = "test_work2"
-        rqueue = "test_return2"
+        work = AMQPQueueDescriptor("test_work411", declare=True, exclusive=False, auto_delete=True)
+        rqueue = AMQPQueueDescriptor("test_return411", declare=True, exclusive=False, auto_delete=True)
         
-        self.send_message(work, "1")
-        self.send_message(rqueue, "2")
-        self.send_message(rqueue, "3")
+        
+        
+        def sender(queue_ready):
+            desc = queue_ready.descriptor
+            if desc == work:
+                self.send_message(work.queue, "1")
+            else:
+                self.send_message(rqueue.queue, "2")
+                self.send_message(rqueue.queue, "3")
 
+        self.bus.subscribe(AMQPQueueInitialized, sender)
         self.bus.subscribe(DefaultBus.ALL, self.stop, BusPriority.LOW_PRIORITY)
         self.bus.subscribe(str, self.receive)
         
@@ -104,7 +113,9 @@ class TestGateway(unittest.TestCase):
         self.bus.send(GatewayShutdownCmd())
         
     def test_1(self):
+        queue = AMQPQueueDescriptor("gateway_test21", declare=True, exclusive=True, auto_delete=True)
+        
         self.bus.subscribe(AMQPSenderReady, lambda x: x.sender.send("1", routing_key=x.queue))
-        g = AMQPGateway("test", connection_params, "gateway_test1", self.bus, self.receive)
+        g = AMQPGateway("test_gateway11", connection_params, [queue], self.bus, self.receive)
         g.run()
         assert self.msgs == ["1"]

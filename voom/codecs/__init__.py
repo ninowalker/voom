@@ -1,10 +1,7 @@
 import codecs
 import importlib
 from voom.codecs.json_codec import JSONCodec
-try:
-    from voom.codecs.protobuf_codec import ProtobufCodec
-except ImportError:
-    ProtobufCodec = None
+
 
 class ParseError(Exception):
     def __init__(self, message, cause):

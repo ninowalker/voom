@@ -4,5 +4,5 @@ GatewayShutdownCmd = namedtuple("GatewayShutdownCmd", "")
 GatewayMessageUnparseable = namedtuple("GatewayMessageUnparseable", "body")
 
 AMQPConnectionReady = namedtuple("AMQPConnectionReady", "connection")
-AMQPQueueInitialized = namedtuple("AMQPQueueInitialized", "queue")
+AMQPQueueInitialized = namedtuple("AMQPQueueInitialized", "descriptor")
 
