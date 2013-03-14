@@ -4,19 +4,18 @@ Created on Mar 11, 2013
 @author: nino
 '''
 import unittest
-from mock import Mock
 import pika
-from voom.gateway.amqp import AMQPGateway
+from voom.gateway.amqp import AMQPQueueListener, AMQPGateway, AMQPSenderReady
 from voom.bus import DefaultBus, LOG
 from voom.priorities import BusPriority
 from logging import basicConfig
-from voom.gateway import GatewayShutdownCmd
+from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady
 
 basicConfig()
 
-class TestSimple(unittest.TestCase):
-    
-    connection_params = pika.ConnectionParameters(host='localhost')
+connection_params = pika.ConnectionParameters(host='localhost')
+
+class TestListener(unittest.TestCase):
     
     def setUp(self):
         self._stop = False
@@ -37,7 +36,7 @@ class TestSimple(unittest.TestCase):
     @property
     def connection(self):
         if not self._connection:
-            self._connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+            self._connection = pika.BlockingConnection(connection_params)
         return self._connection
     
     def receive(self, msg):
@@ -53,6 +52,9 @@ class TestSimple(unittest.TestCase):
             return
         self._stopped = True
         self.bus.send(GatewayShutdownCmd())
+        
+    def _opened(self, connection):
+        self.bus.send(AMQPConnectionReady(connection))
     
     def send_message(self, queue, msg):
         self.channel = self.connection.channel()
@@ -75,13 +77,34 @@ class TestSimple(unittest.TestCase):
         self.bus.subscribe(DefaultBus.ALL, self.stop, BusPriority.LOW_PRIORITY)
         self.bus.subscribe(str, self.receive)
         
-        g = AMQPGateway([work, rqueue], 
-                        self.bus,
-                        connection_params=self.connection_params)
+        g = AMQPQueueListener([work, rqueue], self.bus)
         assert len(self.bus._get_handlers(str)) == 1
-        print "start"
-        g.bind()
+        
+        connection = pika.SelectConnection(connection_params, self._opened)
+        self.bus.subscribe(GatewayShutdownCmd, lambda x: connection.close(), BusPriority.LOW_PRIORITY)
+        connection.ioloop.start()
         
         assert len(self.msgs) == 3, self.msgs
-        assert sorted(self.msgs) == ["1", "2", "3"]
+        assert sorted(self.msgs) == ["1", "2", "3"], self.msgs
         print "done"
+        
+
+class TestGateway(unittest.TestCase):
+    def setUp(self):
+        self.bus = DefaultBus()
+        self.msgs = []
+
+        def p(x):
+            LOG.warning("%s", x)
+        
+        self.bus.subscribe(DefaultBus.ALL, lambda x: p(x), priority=BusPriority.HIGH_PRIORITY)
+
+    def receive(self, listener, body, extras):
+        self.msgs.append(body)
+        self.bus.send(GatewayShutdownCmd())
+        
+    def test_1(self):
+        self.bus.subscribe(AMQPSenderReady, lambda x: x.sender.send("1", routing_key=x.queue))
+        g = AMQPGateway("test", connection_params, "gateway_test1", self.bus, self.receive)
+        g.run()
+        assert self.msgs == ["1"]

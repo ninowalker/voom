@@ -11,7 +11,6 @@ from voom.context import MessageEnvelope,\
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError
 from voom.priorities import BusPriority #@UnusedImport
 from voom.channels import ChannelRegistry, CurrentThreadChannel
-from voom.codecs import EncoderRegistry
 
 LOG = logging.getLogger(__name__)
 
@@ -27,8 +26,6 @@ class DefaultBus(object):
         self._verbose = verbose
         self.raise_errors = raise_errors
         self.resetConfig()
-        self.channels = ChannelRegistry()
-        self.encoders = EncoderRegistry()
     
     def resetConfig(self):
         self._global_handlers = []
