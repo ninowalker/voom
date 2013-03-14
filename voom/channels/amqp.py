@@ -4,32 +4,55 @@ Created on Mar 10, 2013
 @author: nino
 '''
 import urlparse
+from pika.connection import ConnectionParameters, URLParameters, Parameters
+import urllib
 
-
-class AMQPPublishingAddress(object):
+class AMQPAddress(object):
     """
-    amqp:///vhost/?routing_key=a_queue
-    amqp:///vhost/?routing_key=hello&exchange=_an_exchange
+    amqp://host/vhost?routing_key=a_queue
+    amqp://guest:guest@host:1234/vhost?routing_key=hello&exchange=_an_exchange
     """
+    
+    scheme = "amqp"
+    params = None
+    fragment = None
 
-    def __init__(self, url):
-        self.url = url
-        # hackery because urlparse does silly things
+    def __init__(self, connection_params):
+        assert isinstance(connection_params, Parameters)
+        if connection_params.credentials.username:
+            self.netloc = "%s:%s@%s" % (connection_params.credentials.username,
+                                        connection_params.credentials.password,
+                                        connection_params.host)
+        else:
+            self.netloc = connection_params.host
+        if connection_params.port:
+            self.netloc = "%s:%s" % (self.netloc, connection_params.port)
+            
+        if connection_params.virtual_host == '/':
+            self.path = '/%2f'
+        else:
+            self.path = "/%s" % connection_params.virtual_host
+
+        self.extras = {}
+        
+    @classmethod
+    def parse(cls, url):
+        obj = cls(URLParameters(url))
+
         if url[0:4] == 'amqp':
             url = 'http' + url[4:]
         parts = urlparse.urlparse(url)
-        if not parts.query:
-            return
-        params = urlparse.parse_qs(parts.query)
-        for k in params:
-            if len(params[k]) == 1:
-                params[k] = params[k][0]
+        if parts.query:
+            obj.extras.update({k: v for k, v in urlparse.parse_qsl(parts.query)})
+        return obj
         
-        self.vhost = parts.path.split("/")[1]
-        self.routing_key = params.pop('routing_key')
-        self.exchange = params.pop('exchange', '')
-        self.extra_params = params
-
-    def __str__(self):
-        return self.url
-                    
+    def unparse(self, **params_):
+        params = {}
+        params.update(self.extras)
+        params.update(params_)
+        return urlparse.urlunparse((self.scheme, self.netloc, self.path, 
+                                    None, urllib.urlencode(params), None))
+    
+    def get_parameters(self):
+        return URLParameters(self.unparse())
+    

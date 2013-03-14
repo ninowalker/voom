@@ -9,10 +9,11 @@ import pika #@UnusedImport
 import functools
 from collections import namedtuple
 from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady,\
-    AMQPQueueInitialized
+    AMQPQueueInitialized, AMQPQueueDescriptor, AMQPChannelReady
 from voom.priorities import BusPriority
 import socket
 import urllib
+import threading
 
 LOG = getLogger(__name__)
 
@@ -20,22 +21,19 @@ AMQPListenerReady = namedtuple("AMQPListenerReady", "listener queue_descriptor")
 AMQPListenerShutdown = namedtuple("AMQPListenerShutdown", "listener")
 AMQPSenderReady = namedtuple("AMQPSenderReady", "sender queue")
 
-class AMQPQueueDescriptor(namedtuple('AMQPQueueDescriptor', 'queue declare declare_params')):
-    def __new__(cls, queue, declare=False, **kwargs):
-        return super(AMQPQueueDescriptor, cls).__new__(cls, queue, declare, kwargs)
-
 
 class AMQPGateway(object):
     def __init__(self, 
                  app_name, 
                  connection_params, 
                  work_queues, 
-                 event_bus, 
+                 event_bus,
                  on_receive,
                  accept="multipart/mixed",
                  accept_encoding="gzip"):
         self.bus = event_bus
         self.connection_params = connection_params
+
         return_queue = AMQPQueueDescriptor("%s@%s" % (app_name, socket.getfqdn()),
                                            declare=True,
                                            durable=False,
@@ -119,10 +117,11 @@ class AMQPSender(object):
         
     def _init_channel(self, channel):
         LOG.warning("channel open")
-        self.channel = channel
-
+        self.channel = channel        
         callback = functools.partial(self._init_declared, AMQPQueueInitialized(self.return_queue))
         _declare_queue(self.channel, self.return_queue, callback)
+        
+        self.bus.send(AMQPChannelReady(self.channel, self.connection, threading.current_thread()))
         
     def _init_declared(self, obj, *args):
         LOG.warning("created %s", obj.descriptor.queue)
@@ -202,4 +201,3 @@ def _declare_queue(channel, descriptor, callback):
     else:
         channel.queue_declare(queue=descriptor.queue, passive=True, callback=callback)
 
-    

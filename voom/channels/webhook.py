@@ -4,7 +4,7 @@ Created on Mar 2, 2013
 @author: nino
 '''
 
-import requests
+import requests    
 from voom.channels import Sender
 
 class WebhookSender(Sender):
