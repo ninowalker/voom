@@ -12,7 +12,8 @@ class Event(object):
     @classmethod
     def new(cls, name, fields):
         return type(name, (cls,), {'FIELDS': fields})
-            
+
+
 AMQPQueueBound = Event.new("AMQPQueueBound", "binding")
 
 AMQPConnectionReady = Event.new("AMQPConnectionReady", "connection")
@@ -23,6 +24,6 @@ AMQPQueueInitialized = Event.new("AMQPQueueInitialized", "descriptor")
 
 AMQPExchangeInitialized = Event.new("AMQPExchangeInitialized", "descriptor")
 
-AMQPConsumerStarted = Event.new("AMQPConsumerStarted", "descriptor")
+AMQPConsumerStarted = Event.new("AMQPConsumerStarted", "descriptor consumer_tag")
 
 AMQPDataReceived = Event.new("AMQPDataReceived", "channel method properties body")

@@ -7,11 +7,12 @@ from collections import namedtuple
 from logging import getLogger
 import functools
 import pika
-from voom.amqp.events import AMQPConnectionReady, AMQPChannelReady,\
-    AMQPExchangeInitialized, AMQPQueueInitialized, AMQPQueueBound,\
+from voom.amqp.events import AMQPConnectionReady, AMQPChannelReady, \
+    AMQPExchangeInitialized, AMQPQueueInitialized, AMQPQueueBound, \
     AMQPConsumerStarted, AMQPDataReceived
 
 LOG = getLogger(__name__)
+
 
 class AMQPConfigSpec(namedtuple('AMQPConfigSpec', 'connection_params queues exchanges bindings consumers connection_type')):
     """A data structure that composes descriptors of the things that need to be configured
@@ -174,10 +175,10 @@ class AMQPInitializer(object):
     def _start_consumers(self):
         channel = self.channel
         for consumer in (self.spec.consumers or []):
-            channel.basic_consume(functools.partial(self._on_receive, consumer.on_receive), 
-                                  consumer.queue, 
-                                  **consumer.consume_params)
-            self.on_event(AMQPConsumerStarted(consumer))
+            consumer_tag = channel.basic_consume(functools.partial(self._on_receive, consumer.on_receive),
+                                                 consumer.queue,
+                                                 **consumer.consume_params)
+            self.on_event(AMQPConsumerStarted(consumer, consumer_tag))
     
     def _on_event(self, event):
         LOG.warning("event %s", event)
