@@ -1,12 +1,6 @@
 import codecs
 import importlib
 from voom.codecs.json_codec import JSONCodec
-
-
-class ParseError(Exception):
-    def __init__(self, message, cause):
-        super(ParseError, self).__init__(message)
-        self.cause = cause
         
         
 class ContentCodecRegistry(object):
