@@ -4,8 +4,25 @@ Created on Mar 2, 2013
 @author: nino
 '''
 
-import requests    
+import warnings
+import os
+
+
+try:
+    import requests
+except ImportError:
+    requests = None
+except NameError:
+    if os.name == "java":
+        warnings.warn('python-requests is currently incompatible with Jython')
+    else:
+        raise
+    requests = None
+
+
+          
 from voom.channels import Sender
+
 
 class WebhookSender(Sender):
     default_encoding = "json"

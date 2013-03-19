@@ -3,25 +3,22 @@ Created on Mar 11, 2013
 
 @author: nino
 '''
-from voom.context import SessionKeys
 from logging import getLogger
-import pika #@UnusedImport
-import functools
-from collections import namedtuple, defaultdict
-from voom.gateway import GatewayShutdownCmd, AMQPConnectionReady, \
-    AMQPQueueInitialized, AMQPQueueDescriptor, AMQPChannelReady, \
-    AMQPMessageExtras, AMQPDataReceived
+import pika 
+from voom.gateway import GatewayShutdownCmd, GatewayMessageDecodeError
 from voom.priorities import BusPriority
 import socket
-import threading
-from voom.channels.amqp import AMQPAddress
 import os
 import uuid
-import urlparse
 from voom.amqp.config import AMQPInitializer, AMQPConfigSpec, \
-    AMQPConsumerDescriptor
+    AMQPConsumerDescriptor, AMQPQueueDescriptor
 import time
 from voom.amqp.sender import AMQPSender
+from voom.amqp.events import AMQPGatewayReady, AMQPSenderReady, AMQPDataReceived,\
+    AMQPRawDataReceived
+import sys
+from voom.context import SessionKeys
+import urlparse
 
 LOG = getLogger(__name__)
 
@@ -35,71 +32,76 @@ class AMQPGateway(object):
                  supported_content_types,
                  exchanges=None,
                  bindings=None,
-                 consumer_params={},
-                 accept="multipart/mixed",
-                 accept_encoding="gzip"):
+                 consumer_params={}):
+        
+        self.app_id = app_name
+        self.return_queue = AMQPQueueDescriptor("%s.%s@%s" % (app_name, os.getpid(), socket.getfqdn()),
+                                                declare=True, durable=False, exclusive=False, auto_delete=True)
         self.bus = event_bus
         self.attach(self.bus)
-        self.app_id = app_name
+        self.supported_content_types = supported_content_types
+        # we set these up on_complete
+        self.sender = None 
+        self.connection = None
+        self.channel = None
         
-        return_queue = AMQPQueueDescriptor("%s@%s" % (app_name, socket.getfqdn()),
-                                           declare=True,
-                                           durable=False,
-                                           exclusive=False,
-                                           auto_delete=False)
-        
+        # define the consumers: one per queue
         queues = list(queues)
-        queues.append(return_queue)
+        queues.append(self.return_queue)
 
         consumers = []
         for queue in queues:
-            consumers.append(AMQPConsumerDescriptor(self.on_receive,
-                                                    queue.queue, **consumer_params))
+            consumers.append(AMQPConsumerDescriptor(queue.queue, 
+                                                    self.on_receive,
+                                                    **consumer_params))
 
-        # setup the sender                                           
-        self.address = AMQPAddress(connection_params,
-                                   routing_key=return_queue.queue,
-                                   accept=accept,
-                                   accept_encoding=accept_encoding,
-                                   app_id=app_name)        
-        self.sender = AMQPSender(return_queue, self.address, self.bus, supported_content_types)
+        #self.address = AMQPAddress(connection_params,
+        #                           routing_key=return_queue.queue,
+        #                           accept=accept,
+        #                           accept_encoding=accept_encoding,
+        #                           app_id=app_name)        
         self.spec = AMQPConfigSpec(connection_params,
                                    queues=queues,
                                    exchanges=exchanges,
                                    bindings=bindings,
-                           consumers=[]
-                           )
+                                   consumers=consumers
+                                   )
 
         
     def run(self):
-        LOG.info("Gateway starting...")
-        init = AMQPInitializer(self.spec, self.on_complete)
+        """Starts all of the machinery for consuming and replying to messages sent to
+        the work queues. This call will not exit until the gateway is shutdown or an uncaught
+        exception propagates.
+        """
+        LOG.info("AMQPGateway starting...")
+        init = AMQPInitializer(self.spec, self._on_complete)
         init.run()
+        LOG.warning("Gateway exited")
         
-    def shutdown(self, *args):
+    def shutdown(self, msg=None):
+        """Stops consumption and will cause `run()` to exit."""
         LOG.warning("Gateway shutdown")
         self.connection.close()
         self.connection.ioloop.stop()
     
     def attach(self, bus):
+        """Binds event handlers to the bus."""
         bus.subscribe(GatewayShutdownCmd, self.shutdown, BusPriority.LOW_PRIORITY)
         
-    def on_complete(self, connection, channel):
-        self.sender = AMQPSender(channel, self.supported_content_types)
-    
     def reply(self, properties, message, **kwargs):
+        """"""
         headers = properties.headers or {}
         _properties = pika.BasicProperties(delivery_mode=2,
                                            correlation_id=properties.correlation_id or uuid.uuid4().hex,
-                                           app_id=self.app_name,
+                                           app_id=self.app_id,
                                            reply_to=self.return_queue.queue,
                                            user_id=None,
                                            timestamp=time.time(),
                                            content_type=properties.content_type,
                                            content_encoding=properties.content_encoding,
                                            headers={'Session-Id': headers.get('Session-Id'),
-                                                    'Accept': self.supported_content_types.keys(),
-                                                    'Accept-Encoding': self.supported_content_encodings.keys()})
+                                                    'Accept': ", ".join(self.supported_content_types.supported),
+                                                    'Accept-Encoding': ['zip']})
         extra_headers = kwargs.pop('headers', {})
         _properties.headers.update(extra_headers)
         
@@ -107,31 +109,57 @@ class AMQPGateway(object):
             if hasattr(_properties, k):
                 setattr(_properties, k, v)
         
-        self.sender.send(message,
-                         _properties,
-                         routing_key=properties.reply_to,
-                         exchange='',
-                         accept=properties.content_type,
-                         accept_encoding=properties.content_encoding)
+        self.send(message,
+                  _properties,
+                  routing_key=properties.reply_to,
+                  exchange='')
+        
+    def send(self, message, properties, **kwargs):
+        self.sender.send(message, properties, **kwargs)
     
     def on_receive(self, event):
+        """Handle data received on a channel."""
+        assert isinstance(event, AMQPRawDataReceived)
         properties = event.properties
-        codec = self.supported.get_mime_codec(properties.content_type)
-        headers, msgs = codec.decode(event.body)
+        assert isinstance(properties, pika.BasicProperties)
+
+        codec = self.supported_content_types.get_by_content_type(properties.content_type)
+        
+        headers = AMQPSender.extract_headers(properties)
+        print event.method
+        headers['Routing-Key'] = event.method.routing_key
+        headers['Exchange'] = event.method.exchange
         
         context = {SessionKeys.GATEWAY_HEADERS: headers,
-                   SessionKeys.GATEWAY_EXTRAS: event.extras,
-                   }
+                   SessionKeys.GATEWAY_EVENT: event}
         
         if properties.reply_to:
+            context[SessionKeys.REPLY_TO] = properties.reply_to
             parts = urlparse.urlparse(properties.reply_to)
-            if parts.scheme:
-                context[SessionKeys.REPLY_TO] = parts.reply_to
-            else:
-                context[SessionKeys.RESPONDER] = functools.partial(self.reply, properties)
+            if not parts.scheme:
+                context[SessionKeys.RESPONDER] = lambda addr, message: self.reply(properties, message)#functools.partial(self.reply, properties)
         
-        self.bus.send(event, context.copy())
+        try:
+            body = event.body
+            if properties.content_encoding:
+                body = body.decode(properties.content_encoding)
+            _headers, msgs = codec.decode_message(body)
+        except Exception, e:
+            LOG.exception("failed to handle message: %s", body)
+            self.bus.send(GatewayMessageDecodeError(event, e, sys.exc_info()[2]), context)
+            return 
+                
+        # send for auditing purposes        
+        self.bus.send(AMQPDataReceived(msgs, headers, body, event), context)
+
+    def _on_complete(self, spec, connection, channel):
+        """Called by the `AMQPInitializer` after all queues, exchanges, and bindings are configured."""
+        # remember objects:
+        self.connection = connection
+        self.channel = channel
+        # create a sender:
+        self.sender = AMQPSender(channel, self.supported_content_types, from_=self.return_queue.queue)
+        self.bus.send(AMQPSenderReady(self.sender))
+        # let everybody know we're done.        
+        self.bus.send(AMQPGatewayReady(self))
         
-        for msg in msgs:
-            self.bus.send(msg, context.copy())
-    

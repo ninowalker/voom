@@ -26,17 +26,21 @@ class ContentCodecRegistry(object):
                 return c
         return None
             
-    def get_mime_codec(self, type):
+    def get_by_content_type(self, type):
         if type in self.type_to_codec:
             return self.type_to_codec[type]
         
         type = type.split("/", 1)[0] + "/*"
         return self.type_to_codec[type]
+    
+    @property
+    def supported(self):
+        return self.type_to_codec.keys()
 
 
 _STRING_CODECS = {}
         
-def lookup(self, encoding):
+def lookup(encoding):
     return _STRING_CODECS.get(encoding)
 
 def register(name, codec_info):

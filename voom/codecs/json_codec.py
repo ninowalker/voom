@@ -35,3 +35,6 @@ class JSONCodec(object):
         
     def decode(self, input):
         return loads(input)
+    
+    def decode_message(self, body):
+        return {}, [self.decode(body)]

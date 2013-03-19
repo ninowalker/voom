@@ -3,16 +3,7 @@ Created on Mar 15, 2013
 
 @author: nino
 '''
-
-class Event(object):
-    def __init__(self, *args):
-        for k, v in zip(self.FIELDS.split(" "), args):
-            setattr(self, k, v)
-        
-    @classmethod
-    def new(cls, name, fields):
-        return type(name, (cls,), {'FIELDS': fields})
-
+from voom.events.base import Event
 
 AMQPQueueBound = Event.new("AMQPQueueBound", "binding")
 
@@ -26,4 +17,10 @@ AMQPExchangeInitialized = Event.new("AMQPExchangeInitialized", "descriptor")
 
 AMQPConsumerStarted = Event.new("AMQPConsumerStarted", "descriptor consumer_tag")
 
-AMQPDataReceived = Event.new("AMQPDataReceived", "channel method properties body")
+AMQPRawDataReceived = Event.new("AMQPRawDataReceived", "channel method properties body")
+
+AMQPDataReceived = Event.new("AMQPDataReceived", "messages headers decoded_body receive_event")
+
+AMQPGatewayReady = Event.new("AMQPGatewayReady", "gateway")
+
+AMQPSenderReady = Event.new("AMQPSenderReady", "sender")

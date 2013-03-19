@@ -9,7 +9,7 @@ import functools
 import pika
 from voom.amqp.events import AMQPConnectionReady, AMQPChannelReady, \
     AMQPExchangeInitialized, AMQPQueueInitialized, AMQPQueueBound, \
-    AMQPConsumerStarted, AMQPDataReceived
+    AMQPConsumerStarted, AMQPDataReceived, AMQPRawDataReceived
 
 LOG = getLogger(__name__)
 
@@ -33,6 +33,7 @@ class AMQPConfigSpec(namedtuple('AMQPConfigSpec', 'connection_params queues exch
     def __new__(cls, connection_params, queues=None, exchanges=None, bindings=None, consumers=None, connection_type=pika.SelectConnection):
         return super(AMQPConfigSpec, cls).__new__(cls, connection_params, queues, exchanges, bindings, consumers, connection_type)
 
+
 class AMQPQueueDescriptor(namedtuple('AMQPQueueDescriptor', 'queue declare declare_params')):
     """Describes a queue to be checked for existence (if declare=False), or 
     created with the given parameters.
@@ -48,6 +49,7 @@ class AMQPQueueDescriptor(namedtuple('AMQPQueueDescriptor', 'queue declare decla
     def __new__(cls, queue, declare=False, **kwargs):
         return super(AMQPQueueDescriptor, cls).__new__(cls, queue, declare, kwargs)
 
+
 class AMQPExchangeDescriptor(namedtuple('AMQPExchangeDescriptor', 'declare declare_params')):
     """Describes an exchange to be checked for existence (if declare=False), or 
     created with the given parameters.
@@ -59,6 +61,7 @@ class AMQPExchangeDescriptor(namedtuple('AMQPExchangeDescriptor', 'declare decla
     """
     def __new__(cls, declare=True, **kwargs):
         return super(AMQPExchangeDescriptor, cls).__new__(cls, declare, kwargs)
+
 
 class AMQPBindDescriptor(namedtuple('AMQPBindDescriptor', 'queue exchange bind_params')):
     """Describes an exchange to queue binding to be created with the given parameters.
@@ -73,6 +76,7 @@ class AMQPBindDescriptor(namedtuple('AMQPBindDescriptor', 'queue exchange bind_p
     """
     def __new__(cls, queue=None, exchange=None, **bind_params):
         return super(AMQPBindDescriptor, cls).__new__(cls, queue, exchange, bind_params)
+
 
 class AMQPConsumerDescriptor(namedtuple('AMQPQueueConsumer', 'queue on_receive consume_params')):
     """Describes a queue to callback relation to start after all other elements have been 
@@ -184,7 +188,7 @@ class AMQPInitializer(object):
         LOG.warning("event %s", event)
         
     def _on_receive(self, callback, channel, method, properties, body):
-        callback(AMQPDataReceived(channel, method, properties, body))
+        callback(AMQPRawDataReceived(channel, method, properties, body))
                 
     def _complete(self):
         self._start_consumers()

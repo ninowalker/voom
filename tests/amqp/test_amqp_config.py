@@ -10,6 +10,7 @@ from voom.amqp.config import AMQPConfigSpec, AMQPInitializer,\
 from pika.connection import URLParameters
 from logging import basicConfig
 from pika.channel import Channel
+from tests import no_jython
 
 basicConfig()
 
@@ -37,7 +38,8 @@ class Test(unittest.TestCase):
         self.body = event.body
         self.channel.close()
         self.connection.close()
-    
+
+    @no_jython    
     def test_1(self):
         self.spec = AMQPConfigSpec(URLParameters("amqp://guest:guest@localhost:5672/%2f"),
                                    queues=[AMQPQueueDescriptor(self.queue, declare=True, exclusive=True, auto_delete=True)],

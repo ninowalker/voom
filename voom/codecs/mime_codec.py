@@ -35,6 +35,9 @@ class MIMEMessageCodec(object):
         if not codec:
             codec = self.supported_types_registry.search(default_encoding)
         return codec.encode_mime_part(msg)
+    
+    def decode_message(self, body):
+        return self.decode(body)
             
     def decode(self, str_or_fp):
         if hasattr(str_or_fp, 'read'):
@@ -44,5 +47,5 @@ class MIMEMessageCodec(object):
         return dict(msg.items()), [self._decode_part(part) for part in msg.get_payload()]
     
     def _decode_part(self, part):
-        codec = self.supported_types_registry.get_mime_codec(part.get_content_type())
+        codec = self.supported_types_registry.get_by_content_type(part.get_content_type())
         return codec.decode_mime_part(part)

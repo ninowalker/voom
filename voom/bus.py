@@ -8,9 +8,11 @@ import sys
 import traceback
 from voom.context import MessageEnvelope,\
     InvocationFailure, BusState, SessionKeys
-from voom.exceptions import AbortProcessing, BusError, InvalidAddressError
+from voom.exceptions import AbortProcessing, BusError, InvalidAddressError,\
+    InvalidStateError
 from voom.priorities import BusPriority #@UnusedImport
 from voom.channels import ChannelRegistry, CurrentThreadChannel
+from voom.events import MessageForwarded
 
 LOG = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ class DefaultBus(object):
         self._state = threading.local()
         self._verbose = verbose
         self.raise_errors = raise_errors
+        self._current_thread_channel = CurrentThreadChannel()
         self.resetConfig()
     
     def resetConfig(self):
@@ -73,34 +76,30 @@ class DefaultBus(object):
         completing all handlers without aborting."""
         self.state._deferred.append(MessageEnvelope(msg))
         
-    #def set_reply_address(self, address, correlation_id=None, **send_to_kwargs):
-    #    if not self.state:
-    #        raise InvalidStateError("no active context")
-    #    
-    #    self.request.add_header(Headers.REPLY_TO, address)
-    #    self.request.add_header(Headers.CORRELATION_ID, correlation_id)
-    #    self.request.set_context(ContextKeys.REPLY_SEND_KWARGS, send_to_kwargs)
-
     def reply(self, message):
-        if SessionKeys.REPLY_TO not in self.session:
-            raise InvalidAddressError("no reply to address provided in the session")
-        self.send_to(self.session[SessionKeys.REPLY_TO], 
-                     message, 
-                     sender=self.session.get(SessionKeys.REPLY_SENDER)) 
+        reply_to = self.session.get(SessionKeys.REPLY_TO)
+        if not reply_to:
+            raise InvalidAddressError("no reply responder is configured in the session")
         
-    def send_to(self, address, message, sender=None):
-        if sender:
-            sender(address, message)
-            return
-        transport = self.channels.get(address)
-        encoder = self.encoders.get(transport.default_encoding)
+        if reply_to == CurrentThreadChannel.ADDRESS:
+            responder = self._current_thread_channel
+        else:        
+            responder = self.session.get(SessionKeys.RESPONDER) 
+       
+        if not responder:
+            raise InvalidStateError("no reply responder is configured in the session")
         
-        (encoded_msg, mimetype) = encoder(message) if encoder else (message, None)
-        transport(address, encoded_msg, mimetype=mimetype)
+        self.forward(responder,
+                     reply_to, 
+                     message) 
+        
+    def forward(self, sender, address, message):
+        sender(address, message)
+        self.send(MessageForwarded(address, message))
     
     @property
     def thread_channel(self):
-        return self.channels.get(CurrentThreadChannel.ADDRESS)
+        return self._current_thread_channel
         
     def register(self, callback, priority=None, receiver_of=None):
         """Register a function as a handler.

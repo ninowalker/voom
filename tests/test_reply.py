@@ -12,7 +12,11 @@ from voom.exceptions import InvalidStateError, InvalidAddressError
 from voom.decorators import receiver
 from mock import patch
 from voom.context import SessionKeys
+from logging import basicConfig
+from voom.events import MessageForwarded
 
+
+basicConfig()
 
 class TestCurrentThreadSendDelegate(unittest.TestCase):
     def test1(self):        
@@ -41,6 +45,7 @@ class TestCurrentThreadSendDelegate(unittest.TestCase):
 class TestBusReply(unittest.TestCase):
     def setUp(self):
         self.bus = DefaultBus()
+        self.forward = None
 
     def test_errors(self):
         with patch('voom.bus.DefaultBus.session', {}):
@@ -48,17 +53,25 @@ class TestBusReply(unittest.TestCase):
 
         with patch('voom.bus.DefaultBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
             assert self.bus.session == {SessionKeys.REPLY_TO: "badaddr"}, self.bus.session
-            nose.tools.assert_raises(UnknownSchemeError, self.bus.reply, None) #@UndefinedVariable
+            nose.tools.assert_raises(InvalidStateError, self.bus.reply, None) #@UndefinedVariable
         
     def test_reply_1(self):
         @receiver(str)
         def what_is_it(msg):
             self.bus.reply('ponies')
         
+        @receiver(MessageForwarded)
+        def forward(msg):
+            self.forward = msg
+        
         self.bus.register(what_is_it)
+        self.bus.register(forward)
 
         self.bus.send("meow", {SessionKeys.REPLY_TO: CurrentThreadChannel.ADDRESS})
         assert self.bus.thread_channel.pop_all() == ['ponies']
+        assert self.forward
+        assert self.forward.message == "ponies", self.forward
+        assert self.forward.address == CurrentThreadChannel.ADDRESS
         
     def test_reply_2(self):
         @receiver(str)
@@ -69,4 +82,3 @@ class TestBusReply(unittest.TestCase):
         self.bus.raise_errors = True
         
         nose.tools.assert_raises(InvalidAddressError, self.bus.send, "my little")
-                 
