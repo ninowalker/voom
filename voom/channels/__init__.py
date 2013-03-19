@@ -12,19 +12,12 @@ from logging import getLogger
 LOG = getLogger("voom.channels")
 
 
-class TransportError(Exception):
-    def __init__(self, msg, cause):
-        super(TransportError, self).__init__(msg)
-        self.cause = cause
-        
-
 class CurrentThreadChannel(threading.local):
     """Provides a mechanism for collecting messages in the current thread
     for later processing."""
     
     SCHEME = "thread+current"
     ADDRESS = SCHEME + ":"
-    default_encoding = None
     _messages = None
         
     def __call__(self, address, message, **kwargs):
