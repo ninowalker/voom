@@ -8,7 +8,7 @@ import unittest
 from voom.exceptions import AbortProcessing
 from voom.decorators import receiver
 from voom.context import Session, BusState
-from voom.bus import DefaultBus, BusPriority
+from voom.bus import VoomBus, BusPriority
 from nose.tools import assert_raises #@UnresolvedImport
 
 
@@ -57,7 +57,7 @@ class TestSession(unittest.TestCase):
         
 class TestHeaders(unittest.TestCase):
     def setUp(self):
-        self.bus = DefaultBus()
+        self.bus = VoomBus()
 
     def test_arbitrary_headers(self):
         uni = u'\u014b'

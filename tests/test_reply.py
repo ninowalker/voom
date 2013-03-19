@@ -5,8 +5,8 @@ Created on Feb 28, 2013
 '''
 import unittest
 import threading
-from voom.channels import CurrentThreadChannel
-from voom.bus import DefaultBus
+from voom.local import CurrentThreadChannel
+from voom.bus import VoomBus
 import nose.tools
 from voom.exceptions import InvalidStateError, InvalidAddressError
 from voom.decorators import receiver
@@ -44,14 +44,14 @@ class TestCurrentThreadSendDelegate(unittest.TestCase):
 
 class TestBusReply(unittest.TestCase):
     def setUp(self):
-        self.bus = DefaultBus()
+        self.bus = VoomBus()
         self.forward = None
 
     def test_errors(self):
-        with patch('voom.bus.DefaultBus.session', {}):
+        with patch('voom.bus.VoomBus.session', {}):
             nose.tools.assert_raises(InvalidAddressError, self.bus.reply, None) #@UndefinedVariable
 
-        with patch('voom.bus.DefaultBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
+        with patch('voom.bus.VoomBus.session', {SessionKeys.REPLY_TO: "badaddr"}):
             assert self.bus.session == {SessionKeys.REPLY_TO: "badaddr"}, self.bus.session
             nose.tools.assert_raises(InvalidStateError, self.bus.reply, None) #@UndefinedVariable
         

@@ -6,7 +6,7 @@ Created on Mar 17, 2013
 import unittest
 from voom.amqp.gateway import AMQPGateway
 from mock import Mock, call
-from voom.bus import DefaultBus
+from voom.bus import VoomBus
 import pika
 from voom.codecs import ContentCodecRegistry
 from pika.connection import Parameters
@@ -29,7 +29,7 @@ basicConfig()
 class Test(unittest.TestCase):
     def test_on_complete(self):
         params = Mock(spec=Parameters)
-        bus = Mock(spec=DefaultBus)
+        bus = Mock(spec=VoomBus)
         g = AMQPGateway("test_on_complete", 
                         params, 
                         [], 
@@ -53,7 +53,7 @@ class Test(unittest.TestCase):
         g.connection.ioloop.stop.assert_called_with()
         
     def test_on_receive_1(self):
-        bus = Mock(spec=DefaultBus)
+        bus = Mock(spec=VoomBus)
         g = AMQPGateway("test_on_complete", 
                         Mock(spec=Parameters), 
                         [], 
@@ -96,7 +96,7 @@ class Test(unittest.TestCase):
         assert callable(context[SessionKeys.RESPONDER])
         
     def test_on_receive_2(self):
-        bus = Mock(spec=DefaultBus)
+        bus = Mock(spec=VoomBus)
         g = AMQPGateway("test_on_complete", 
                         Mock(spec=Parameters), 
                         [], 
@@ -128,7 +128,7 @@ class Test(unittest.TestCase):
         context = _call[1]
 
     def test_receive_decode_error(self):
-        bus = Mock(spec=DefaultBus)
+        bus = Mock(spec=VoomBus)
         g = AMQPGateway("test_decode_error", 
                         Mock(spec=Parameters), 
                         [], 
@@ -170,7 +170,7 @@ class TestRoundtrip(unittest.TestCase):
         g = AMQPGateway(work.queue,
                         pika.ConnectionParameters(host='localhost'),
                         [work],
-                        DefaultBus(),
+                        VoomBus(),
                         ContentCodecRegistry([JSONCodec()]))
         
         bus = g.bus

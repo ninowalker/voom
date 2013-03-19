@@ -11,13 +11,13 @@ from voom.context import MessageEnvelope,\
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError,\
     InvalidStateError
 from voom.priorities import BusPriority #@UnusedImport
-from voom.channels import CurrentThreadChannel
+from voom.local import CurrentThreadChannel
 from voom.events import MessageForwarded
 
 LOG = logging.getLogger(__name__)
 
 
-class DefaultBus(object):
+class VoomBus(object):
     #: Key used to subscribe to ALL messages
     ALL = object()
     #: Key used to subscribe to ALL failures

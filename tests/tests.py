@@ -10,7 +10,7 @@ import nose.tools
 import voom.bus
 
 from voom.decorators import receiver
-from voom.bus import DefaultBus, BusPriority
+from voom.bus import VoomBus, BusPriority
 from voom.exceptions import BusError, AbortProcessing
 from nose.tools import assert_raises #@UnresolvedImport
 from mock import Mock, patch
@@ -18,7 +18,7 @@ from mock import Mock, patch
 
 class BaseTest(unittest.TestCase):
     def setUp(self):                
-        self.bus = DefaultBus(verbose=True)
+        self.bus = VoomBus(verbose=True)
 
 
 class TestBasic(BaseTest):
@@ -318,7 +318,7 @@ class TestRaiseErrors(BaseTest):
 
 class TestSession(unittest.TestCase):
     def setUp(self):
-        self.bus = DefaultBus()
+        self.bus = VoomBus()
 
     def test_1(self):
         session = {}
@@ -347,7 +347,7 @@ class TestSession(unittest.TestCase):
 
 class TestDefer(unittest.TestCase):
     def setUp(self):
-        self.bus = DefaultBus()
+        self.bus = VoomBus()
         
     def test1(self):        
         @receiver(str)
