@@ -2,9 +2,29 @@ import os
 from setuptools import setup, find_packages
 
 from voom import __version__
+import glob
+
+README = "README.md"
+
+base = os.path.dirname(__file__)
+local = lambda x: os.path.join(base, x)
 
 def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+    return open(local(fname)).read()
+
+def hydrate_examples():
+    examples = {}
+    for f in glob.glob(local('examples/*')) + glob.glob(local('tests/*')) + glob.glob(local('tests/*/*')):
+        if os.path.isdir(f):
+            continue
+        examples[os.path.basename(f)] = "\n    ".join(read(f).split("\n"))
+    #print examples.keys()
+    readme = read(README +".in") % examples
+    with open(local(README), "w") as f:
+        f.write(readme)
+
+hydrate_examples()
+
 
 setup(
     name = "voom",
@@ -15,7 +35,7 @@ setup(
     url='https://github.com/ninowalker/voom',
     license = "BSD",
     packages=find_packages(exclude=['tests']),
-    long_description=read('README'),
+    long_description=read(README),
     setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 
                     'mock', 'pika', 'protobuf'],
     test_suite = 'nose.collector',
