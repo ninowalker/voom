@@ -22,6 +22,7 @@ from voom.context import SessionKeys
 from voom.amqp.config import AMQPQueueDescriptor
 from voom.decorators import receiver
 import os
+from tests import no_jython
 
 basicConfig()
 
@@ -162,6 +163,7 @@ class Test(unittest.TestCase):
         assert callable(context[SessionKeys.RESPONDER])
 
 class TestRoundtrip(unittest.TestCase):
+    @no_jython
     def test_1(self):
         work = AMQPQueueDescriptor("test_round_trip", declare=True, exclusive=False, auto_delete=True)
         

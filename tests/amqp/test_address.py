@@ -4,7 +4,7 @@ Created on Mar 11, 2013
 @author: nino
 '''
 import unittest
-from voom.channels.amqp import AMQPAddress 
+from voom.amqp.address import AMQPAddress 
 from pika.connection import ConnectionParameters
 
 

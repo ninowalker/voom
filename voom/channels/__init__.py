@@ -11,36 +11,6 @@ from logging import getLogger
 
 LOG = getLogger("voom.channels")
 
-DEFAULT = ":default"
-
-class UnknownSchemeError(ValueError): pass
-
-class ChannelRegistry(object):
-    """Provides a mapping between address schemes and a given channel."""
-    def __init__(self):
-        self.channels = {CurrentThreadChannel.SCHEME: CurrentThreadChannel()}
-        
-    def register(self, scheme, transport):
-        self.transport[scheme] = transport
-        
-    def get(self, address):
-        scheme = urlparse.urlparse(address).scheme
-        try:
-            return self.channels[scheme]
-        except KeyError:
-            raise UnknownSchemeError("Unknown protocol scheme in address: %s" % address)
-
-
-class Sender(object):
-    default_encoding = None
-    def __call__(self, address, message, mimetype):
-        try:
-            self._send(address, message, mimetype)
-        except TransportError:
-            raise
-        except Exception, e:
-            raise TransportError, (unicode(e), e), sys.exc_info()[2] 
-
 
 class TransportError(Exception):
     def __init__(self, msg, cause):

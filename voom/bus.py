@@ -11,7 +11,7 @@ from voom.context import MessageEnvelope,\
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError,\
     InvalidStateError
 from voom.priorities import BusPriority #@UnusedImport
-from voom.channels import ChannelRegistry, CurrentThreadChannel
+from voom.channels import CurrentThreadChannel
 from voom.events import MessageForwarded
 
 LOG = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ Created on Feb 28, 2013
 '''
 import unittest
 import threading
-from voom.channels import CurrentThreadChannel, UnknownSchemeError
+from voom.channels import CurrentThreadChannel
 from voom.bus import DefaultBus
 import nose.tools
 from voom.exceptions import InvalidStateError, InvalidAddressError
