@@ -92,8 +92,8 @@ class TestHeaders(unittest.TestCase):
         self.bus.register(aborter)
         self.bus.register(not_aborter, priority=BusPriority.LOW_PRIORITY)
         
-        self.bus.send("foo")
+        self.bus.publish("foo")
         assert self.msg == "foo"
         self.msg = None
-        self.bus.send("cancel")
+        self.bus.publish("cancel")
         assert self.msg == None

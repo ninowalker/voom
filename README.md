@@ -48,7 +48,7 @@
                     bus.reply(msg.messages[0])
                     return
                 
-                bus.send(GatewayShutdownCmd())
+                bus.publish(GatewayShutdownCmd())
             
             @receiver(AMQPGatewayReady)
             def on_ready(msg):

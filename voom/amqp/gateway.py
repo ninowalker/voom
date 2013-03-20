@@ -146,11 +146,11 @@ class AMQPGateway(object):
             _headers, msgs = codec.decode_message(body)
         except Exception, e:
             LOG.exception("failed to handle message: %s", body)
-            self.bus.send(GatewayMessageDecodeError(event, e, sys.exc_info()[2]), context)
+            self.bus.publish(GatewayMessageDecodeError(event, e, sys.exc_info()[2]), context)
             return 
                 
         # send for auditing purposes        
-        self.bus.send(AMQPDataReceived(msgs, headers, body, event), context)
+        self.bus.publish(AMQPDataReceived(msgs, headers, body, event), context)
 
     def _on_complete(self, spec, connection, channel):
         """Called by the `AMQPInitializer` after all queues, exchanges, and bindings are configured."""
@@ -159,7 +159,7 @@ class AMQPGateway(object):
         self.channel = channel
         # create a sender:
         self.sender = AMQPSender(channel, self.supported_content_types, from_=self.return_queue.queue)
-        self.bus.send(AMQPSenderReady(self.sender))
+        self.bus.publish(AMQPSenderReady(self.sender))
         # let everybody know we're done.        
-        self.bus.send(AMQPGatewayReady(self))
+        self.bus.publish(AMQPGatewayReady(self))
         

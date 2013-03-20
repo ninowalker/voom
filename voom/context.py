@@ -30,7 +30,7 @@ class BusState(object):
         
             
 class Session(dict):
-    """A bag for storing session variables during a Bus.send() call."""
+    """A bag for storing session variables during a Bus.publish() call."""
     def __init__(self, **kwargs):
         self.update(kwargs)
 

@@ -48,7 +48,7 @@ class TestBasic(BaseTest):
         self.bus.register(foo)
         
         msg = "xoxo"
-        self.bus.send(msg)
+        self.bus.publish(msg)
         assert self._adec == msg
         assert this.bus.current_message == None
         
@@ -71,12 +71,12 @@ class TestBasic(BaseTest):
         self.bus.subscribe(self.bus.ALL, glob)
         
         msg = "msg"
-        self.bus.send(msg)
+        self.bus.publish(msg)
         assert self.foo_ == msg
         assert self.all_ == msg
         assert self.obj_ == None
         mobj = object()
-        self.bus.send(mobj)
+        self.bus.publish(mobj)
         assert self.obj_ == mobj
         assert self.foo_ == msg
         assert self.all_ == mobj
@@ -93,9 +93,9 @@ class TestBasic(BaseTest):
             
         self.bus.register(foo_async)
         self.bus.register(foo_async) # handle already registered
-        self.bus.send("x")
+        self.bus.publish("x")
         assert self._ack == "x"
-        self.bus.send(1)
+        self.bus.publish(1)
         assert self._ack == 1
         
         self.bus.unsubscribe(str, foo_async)
@@ -107,29 +107,29 @@ class TestPriority(BaseTest):
         self.bus.verbose = True
         self.bus.subscribe(str, lambda s: msgs.append(1), priority=BusPriority.HIGH_PRIORITY)
         
-        self.bus.send("frackle")
+        self.bus.publish("frackle")
         assert msgs == [1], msgs
         msgs = []
 
         self.bus.subscribe(str, lambda s: msgs.append(3), priority=BusPriority.LOW_PRIORITY)
         
-        self.bus.send("frackle")
+        self.bus.publish("frackle")
         assert msgs == [1, 3], msgs
         msgs = []
 
         self.bus.subscribe(str, lambda s: msgs.append(2))
-        self.bus.send("frackle")
+        self.bus.publish("frackle")
         assert msgs == [1, 2, 3], msgs
         
         def hi(s):
             return msgs.append(0)
         self.bus.subscribe(str, hi, priority=BusPriority.LOW_PRIORITY+1)
         msgs = []
-        self.bus.send("frackle")
+        self.bus.publish("frackle")
         assert msgs == [1, 2, 3, 0], msgs
         self.bus.subscribe(str, hi, priority=0)
         msgs = []
-        self.bus.send("frackle")
+        self.bus.publish("frackle")
         assert msgs == [0, 1, 2, 3], msgs
 
 
@@ -149,7 +149,7 @@ class TestErrorQueue(BaseTest):
             
         self.bus.subscribe(self.bus.ERRORS, catch, 0)
         self.bus.subscribe(str, fail)
-        self.bus.send("cows")
+        self.bus.publish("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
@@ -158,7 +158,7 @@ class TestErrorQueue(BaseTest):
         # ensure no recursion
         msgs = []
         self.bus.subscribe(self.bus.ERRORS, fail, 0)
-        self.bus.send("cows")
+        self.bus.publish("cows")
         assert len(msgs) == 1
         failure = msgs[0]
         assert isinstance(failure.exception, FancyException)
@@ -172,12 +172,12 @@ class TestBreadth(BaseTest):
         
         def parent(s):
             msgs.append("parent")
-            self.bus.send(1)
+            self.bus.publish(1)
             assert self.bus.current_message.body == "x"
             
         def child1(i):
             msgs.append("c1")
-            self.bus.send(1.1)
+            self.bus.publish(1.1)
             assert self.bus.current_message.body == 1
 
         def child2(i):
@@ -192,7 +192,7 @@ class TestBreadth(BaseTest):
         self.bus.subscribe(int, child1, priority=BusPriority.HIGH_PRIORITY)
         self.bus.subscribe(int, child2, priority=BusPriority.LOW_PRIORITY)
         self.bus.subscribe(float, child3, priority=BusPriority.HIGH_PRIORITY)
-        self.bus.send("x")
+        self.bus.publish("x")
         assert msgs == ["parent", "c1", "c2", "c3"], msgs
         assert self.bus.current_message == None
         
@@ -227,7 +227,7 @@ class TestSettings(BaseTest):
             self.x = True
         
         self.bus.loader = loader
-        self.bus.send('s')
+        self.bus.publish('s')
         assert self.x
         
 class TestRaiseErrors(BaseTest):
@@ -244,7 +244,7 @@ class TestRaiseErrors(BaseTest):
     
     def test_bad_loader(self):
         self.bus.loader = "meow"
-        assert_raises(TypeError, self.bus.send, "s")
+        assert_raises(TypeError, self.bus.publish, "s")
     
     def test1(self):
         self.bus.raise_errors = True
@@ -256,16 +256,16 @@ class TestRaiseErrors(BaseTest):
         
         assert self.bus.raise_errors
         
-        assert_raises(ValueError, self.bus.send, "s")
+        assert_raises(ValueError, self.bus.publish, "s")
         self.bus.raise_errors = False
         
-        self.bus.send("xxx") # no error
+        self.bus.publish("xxx") # no error
             
     def test_unsubscribe(self):
         with assert_raises(ValueError):
             self.bus.unsubscribe(str, map)
             
-    def test_bad_send_error(self):
+    def test_bad_publish_error(self):
         @receiver(str)
         def thrower(m):
             raise ValueError(m)
@@ -274,7 +274,7 @@ class TestRaiseErrors(BaseTest):
 
         with patch.object(self.bus, '_send_error') as ex:
             ex.side_effect = ValueError
-            self.bus.send("x")
+            self.bus.publish("x")
             assert type(ex.call_args_list[0].call_list()[0][0][2]) == ValueError
         assert self.bus.session is None
         
@@ -287,14 +287,14 @@ class TestRaiseErrors(BaseTest):
         self.bus._send_error = Mock(side_effect=ValueError)
         
         # this will swallow the error
-        self.bus.send("x")
+        self.bus.publish("x")
         
         # now we cause problems real, hijacking
         # LOG.exception which should never barf. 
         with patch.object(self._log, 'exception') as fe: #@UndefinedVariable
             fe.side_effect = TypeError
             with nose.tools.assert_raises(BusError): #@UndefinedVariable
-                self.bus.send("x")
+                self.bus.publish("x")
             
     def test_error_abort(self):
         self.a = 0
@@ -308,12 +308,12 @@ class TestRaiseErrors(BaseTest):
 
         self.bus.register(doer, BusPriority.LOW_PRIORITY)
         
-        self.bus.send("x")
+        self.bus.publish("x")
         assert self.a == 1
         
         self.bus.register(thrower)
         self.bus._send_error = Mock(side_effect=AbortProcessing)
-        self.bus.send("x")
+        self.bus.publish("x")
         assert self.a == 1
 
 class TestSession(unittest.TestCase):
@@ -328,20 +328,20 @@ class TestSession(unittest.TestCase):
             session.update(self.bus.session)
             
         self.bus.register(doer1)
-        self.bus.send("meow", dict(a=1, b=2))
+        self.bus.publish("meow", dict(a=1, b=2))
         assert session == dict(a=1, b=2, meow=True)
         
         session = {}
-        self.bus.send("meow")
+        self.bus.publish("meow")
         assert session == dict(meow=True)
         
         @receiver(str)
         def doer2(s):
             if s == "meow":
-                self.bus.send("grr")
+                self.bus.publish("grr")
         self.bus.register(doer2)
         session = {}
-        self.bus.send("meow")
+        self.bus.publish("meow")
         assert session == dict(meow=True, grr=True)
         
 
@@ -362,6 +362,6 @@ class TestDefer(unittest.TestCase):
         self.msgs = []
         self.bus.register(h1)
         self.bus.register(h2)
-        self.bus.send("s")
+        self.bus.publish("s")
         assert self.msgs == ['s', 's', 1]
         

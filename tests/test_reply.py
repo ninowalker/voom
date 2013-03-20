@@ -67,7 +67,7 @@ class TestBusReply(unittest.TestCase):
         self.bus.register(what_is_it)
         self.bus.register(forward)
 
-        self.bus.send("meow", {SessionKeys.REPLY_TO: CurrentThreadChannel.ADDRESS})
+        self.bus.publish("meow", {SessionKeys.REPLY_TO: CurrentThreadChannel.ADDRESS})
         assert self.bus.thread_channel.pop_all() == ['ponies']
         assert self.forward
         assert self.forward.message == "ponies", self.forward
@@ -81,4 +81,4 @@ class TestBusReply(unittest.TestCase):
         self.bus.register(what_is_it)
         self.bus.raise_errors = True
         
-        nose.tools.assert_raises(InvalidAddressError, self.bus.send, "my little")
+        nose.tools.assert_raises(InvalidAddressError, self.bus.publish, "my little")

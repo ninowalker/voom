@@ -36,7 +36,7 @@ class Test(unittest.TestCase):
                        Mock(spec=pika.channel.Channel))
         
         assert g.sender is not None
-        bus.send.assert_has_calls([call(AMQPSenderReady(g.sender)),
+        bus.publish.assert_has_calls([call(AMQPSenderReady(g.sender)),
                                    call(AMQPGatewayReady(g))])
         g.connection.ioloop = Mock(spec=IOLoop)
         g.shutdown()
@@ -66,8 +66,8 @@ class Test(unittest.TestCase):
                                     json.dumps(data).encode("zip"))
         
         g.on_receive(event)
-        assert bus.send.call_count == 1
-        calls = bus.send.call_args_list
+        assert bus.publish.call_count == 1
+        calls = bus.publish.call_args_list
         #bus.send.assert_called_once_with(GatewayMessageDecodeError(event, None, None))
         _call = calls[0][0]
         assert len(_call) == 2
@@ -109,8 +109,8 @@ class Test(unittest.TestCase):
                                     json.dumps(data).encode("zip"))
         
         g.on_receive(event)
-        assert bus.send.call_count == 1
-        calls = bus.send.call_args_list
+        assert bus.publish.call_count == 1
+        calls = bus.publish.call_args_list
         _call = calls[0][0]
         assert len(_call) == 2
         assert isinstance(_call[0], AMQPDataReceived), type(_call[0])
@@ -139,8 +139,8 @@ class Test(unittest.TestCase):
                                     json.dumps(data).encode("zip"))
         
         g.on_receive(event)
-        assert bus.send.call_count == 1
-        calls = bus.send.call_args_list
+        assert bus.publish.call_count == 1
+        calls = bus.publish.call_args_list
         _call = calls[0][0]
         assert len(_call) == 2
         assert isinstance(_call[0], GatewayMessageDecodeError), type(_call[0])

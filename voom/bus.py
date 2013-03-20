@@ -67,7 +67,7 @@ class VoomBus(object):
     def session(self):
         return self.state.session if self.state else None
                 
-    def send(self, body, session_vars=None):
+    def publish(self, body, session_vars=None):
         self._load()            
         self._send_loop(MessageEnvelope(body), session_vars)
     
@@ -95,7 +95,7 @@ class VoomBus(object):
         
     def forward(self, sender, address, message):
         sender(address, message)
-        self.send(MessageForwarded(address, message))
+        self.publish(MessageForwarded(address, message))
     
     @property
     def thread_channel(self):
