@@ -8,3 +8,5 @@ build
 cover
 .settings
 *.class
+*~
+.DS_Store
