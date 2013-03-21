@@ -6,6 +6,7 @@ Created on Mar 11, 2013
 import unittest
 from voom.amqp.address import AMQPAddress 
 from pika.connection import ConnectionParameters
+import nose.tools
 
 
 class Test(unittest.TestCase):
@@ -26,7 +27,11 @@ class Test(unittest.TestCase):
         a = "amqp://localhost:5672/%2f?routing_key=a_queue&meow=1"
         addr = AMQPAddress.parse(a)
         assert addr.extras == {'routing_key': 'a_queue', 'meow': '1'}, addr.__dict__
+        assert addr.get('routing_key') == 'a_queue'
         assert addr.path == '/%2f', addr.__dict__
+        
+    def test_fail(self):
+        nose.tools.assert_raises(ValueError, AMQPAddress.parse, "http://") #@UndefinedVariable
         
 #        a = "amqp:///vhost/?routing_key=hello&exchange=_an_exchange"
 #        addr = AMQPAddress(a)

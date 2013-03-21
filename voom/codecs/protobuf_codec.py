@@ -40,7 +40,7 @@ class ProtobufBinaryCodec(TypeCodec):
         if pos == -1:
             message_type = message_type or self.message_type
             if not message_type:
-                raise Exception("no message type")
+                raise TypeError("no message type")
             pos = 0
         else:
             message_type = input[0:pos]

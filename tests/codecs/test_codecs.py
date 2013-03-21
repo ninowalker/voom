@@ -4,22 +4,34 @@ Created on Mar 13, 2013
 @author: nino
 '''
 import unittest
-from voom.codecs import ContentCodecRegistry
 from voom.codecs.json_codec import MIMEJSONCodec
 from voom.codecs.mime_codec import MIMEMessageCodec
 from voom.codecs.pickle_codec import MIMEPickleCodec
 
-try:
-    from google.protobuf.descriptor_pb2 import FileOptions
-    HAS_PROTOBUF=True
-except ImportError:
-    HAS_PROTOBUF=False
+from google.protobuf.descriptor_pb2 import FileOptions
+from voom.codecs.protobuf_codec import MIMEProtobufBinaryCodec,\
+    ProtobufBinaryCodec
     
-if HAS_PROTOBUF:
-    from voom.codecs.protobuf_codec import MIMEProtobufBinaryCodec
+import google.protobuf.descriptor_pb2
+from mock import patch
+import nose.tools
+
+class TestProtobuf(unittest.TestCase):
+    def test_protobuf_1(self):
+        codec = ProtobufBinaryCodec()
+        with patch('importlib.import_module', 
+                   return_value=google.protobuf.descriptor_pb2) as mock:
+            codec.get_class("foo.FileOptions")
+            mock.assert_called_with("foo_pb2")
+            
+        nose.tools.assert_raises(TypeError, codec.decode, "stuff")
+        nose.tools.assert_raises(ImportError, codec.decode, "stuff", "foo.FileOptions")
 
 
 class TestMIME(unittest.TestCase):
+    def test_type(self):
+        assert len(MIMEMessageCodec().mimetypes()) == 1
+    
     def test_json(self):
         supported = [MIMEJSONCodec()]
         self.run_it(supported, [range(0, 10)])
@@ -27,10 +39,8 @@ class TestMIME(unittest.TestCase):
     def test_pickle(self):
         supported = [MIMEPickleCodec()]
         self.run_it(supported, [range(0, 10)])
-
+        
     def test_protobuf(self):
-        if not HAS_PROTOBUF:
-            return
         codec = MIMEProtobufBinaryCodec()
         codec.registry['google.protobuf.FileOptions'] = FileOptions
         supported = [codec]
@@ -39,8 +49,6 @@ class TestMIME(unittest.TestCase):
         self.run_it(supported, [obj])
         
     def test_mixed(self):
-        if not HAS_PROTOBUF:
-            return
         codec = MIMEProtobufBinaryCodec()
         codec.registry['google.protobuf.FileOptions'] = FileOptions
         supported = [MIMEJSONCodec(), codec]
