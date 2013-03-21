@@ -29,7 +29,7 @@ class AMQPGateway(object):
                  connection_params,
                  queues,
                  event_bus,
-                 supported_content_types,
+                 message_codecs,
                  exchanges=None,
                  bindings=None,
                  consumer_params={}):
@@ -39,7 +39,7 @@ class AMQPGateway(object):
                                                 declare=True, durable=False, exclusive=False, auto_delete=True)
         self.bus = event_bus
         self.attach(self.bus)
-        self.supported_content_types = supported_content_types
+        self.message_codecs = message_codecs
         # we set these up on_complete
         self.sender = None 
         self.connection = None
@@ -100,7 +100,7 @@ class AMQPGateway(object):
                                            content_type=properties.content_type,
                                            content_encoding=properties.content_encoding,
                                            headers={'Session-Id': headers.get('Session-Id'),
-                                                    'Accept': ", ".join(self.supported_content_types.supported),
+                                                    'Accept': ", ".join(self.message_codecs.supported),
                                                     'Accept-Encoding': ['zip']})
         extra_headers = kwargs.pop('headers', {})
         _properties.headers.update(extra_headers)
@@ -123,7 +123,7 @@ class AMQPGateway(object):
         properties = event.properties
         assert isinstance(properties, pika.BasicProperties)
 
-        codec = self.supported_content_types.get_by_content_type(properties.content_type)
+        codec = self.message_codecs.get_by_content_type(properties.content_type)
         
         headers = AMQPSender.extract_headers(properties)
         print event.method
@@ -158,7 +158,7 @@ class AMQPGateway(object):
         self.connection = connection
         self.channel = channel
         # create a sender:
-        self.sender = AMQPSender(channel, self.supported_content_types, from_=self.return_queue.queue)
+        self.sender = AMQPSender(channel, self.message_codecs, from_=self.return_queue.queue)
         self.bus.publish(AMQPSenderReady(self.sender))
         # let everybody know we're done.        
         self.bus.publish(AMQPGatewayReady(self))

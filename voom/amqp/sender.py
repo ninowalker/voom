@@ -27,7 +27,7 @@ class AMQPSender(object):
         LOG.debug("send properties=%s", properties)
 
         encoder = self.supported_content_types.get_by_content_type(properties.content_type)
-        body = encoder.encode(message)
+        body = encoder.encode_message(message, {})
         
         if properties.content_encoding:
             body = body.encode(properties.content_encoding)

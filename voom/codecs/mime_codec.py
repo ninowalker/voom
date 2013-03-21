@@ -5,47 +5,42 @@ Created on Mar 10, 2013
 '''
 
 from email.mime.multipart import MIMEMultipart
+from voom.codecs import MessageCodec
 import email
 
 
-class MIMEMessageCodec(object):
-    def __init__(self, supported_types_registry):
-        self.supported_types_registry = supported_types_registry
-
-    def supported_types(self):
-        return (object, type(None))
-    
+class MIMEMessageCodec(MessageCodec): 
+    TYPE = "multipart/mixed"
+       
     def mimetypes(self):
-        return ["multipart/mixed"]
+        """Content types handled"""
+        return [self.TYPE]
         
-    def encode(self, body, headers={}):
+    def encode_message(self, messages, headers):
+        """Encodes a list of messages as MIME parts with
+        headers included at the root of the document."""
         msg = MIMEMultipart()
         for header in headers:
             msg[header] = headers[header]
         
-        if not isinstance(body, list):
-            body = [body]
+        if not isinstance(messages, list):
+            messages = [messages]
 
-        for message in body:
-            msg.attach(self._encode_part(message))
+        for message in messages:
+            part = self._encode_part(message)
+            msg.attach(part)
         return msg.as_string()
     
-    def _encode_part(self, msg, default_encoding="json"):
-        codec = self.supported_types_registry.search(msg)
-        if not codec:
-            codec = self.supported_types_registry.search(default_encoding)
-        return codec.encode_mime_part(msg)
-    
-    def decode_message(self, body):
-        return self.decode(body)
-            
-    def decode(self, str_or_fp):
+    def decode_message(self, str_or_fp):
+        """Converts a string/file object into a set of headers and decoded parts."""
         if hasattr(str_or_fp, 'read'):
             msg = email.message_from_file(str_or_fp)
         else:
             msg = email.message_from_string(str_or_fp)
-        return dict(msg.items()), [self._decode_part(part) for part in msg.get_payload()]
+            
+        parts = []
+        for part in msg.get_payload():
+            parts.append(self._decode_part(part, part.get_content_type()))
+            
+        return dict(msg.items()), parts
     
-    def _decode_part(self, part):
-        codec = self.supported_types_registry.get_by_content_type(part.get_content_type())
-        return codec.decode_mime_part(part)

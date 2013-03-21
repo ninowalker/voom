@@ -11,7 +11,7 @@ from pika.adapters.select_connection import IOLoop
 from logging import basicConfig
 from voom.priorities import BusPriority
 from voom.gateway import GatewayShutdownCmd, GatewayMessageDecodeError
-from voom.codecs.json_codec import JSONCodec
+from voom.codecs.json_codec import JSONCodec, JSONMessageCodec
 import json
 from voom.context import SessionKeys
 
@@ -49,7 +49,7 @@ class Test(unittest.TestCase):
                         Mock(spec=Parameters), 
                         [], 
                         bus,
-                        ContentCodecRegistry([JSONCodec()]))
+                        ContentCodecRegistry(JSONMessageCodec()))
         
         bus.reset_mock()
         #codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
@@ -63,7 +63,7 @@ class Test(unittest.TestCase):
         event = AMQPRawDataReceived(Mock(spec=pika.channel.Channel),
                                     Mock(routing_key="r"), 
                                     properties, 
-                                    json.dumps(data).encode("zip"))
+                                    json.dumps(dict(parts=[data], headers={})).encode("zip"))
         
         g.on_receive(event)
         assert bus.publish.call_count == 1
@@ -92,7 +92,7 @@ class Test(unittest.TestCase):
                         Mock(spec=Parameters), 
                         [], 
                         bus,
-                        ContentCodecRegistry([JSONCodec()]))
+                        ContentCodecRegistry(JSONMessageCodec()))
         
         bus.reset_mock()
         #codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
@@ -106,7 +106,7 @@ class Test(unittest.TestCase):
         event = AMQPRawDataReceived(Mock(spec=pika.channel.Channel),
                                     Mock(), 
                                     properties, 
-                                    json.dumps(data).encode("zip"))
+                                    json.dumps(dict(parts=[data], headers={})).encode("zip"))
         
         g.on_receive(event)
         assert bus.publish.call_count == 1
@@ -124,7 +124,7 @@ class Test(unittest.TestCase):
                         Mock(spec=Parameters), 
                         [], 
                         bus,
-                        ContentCodecRegistry([JSONCodec()]))
+                        ContentCodecRegistry(JSONMessageCodec()))
         
         bus.reset_mock()
         properties = pika.BasicProperties(reply_to="123",

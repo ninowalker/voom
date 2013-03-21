@@ -5,9 +5,9 @@ Created on Mar 13, 2013
 '''
 import unittest
 from voom.codecs import ContentCodecRegistry
-from voom.codecs.json_codec import JSONCodec
+from voom.codecs.json_codec import MIMEJSONCodec
 from voom.codecs.mime_codec import MIMEMessageCodec
-from voom.codecs.pickle_codec import PickleCodec
+from voom.codecs.pickle_codec import MIMEPickleCodec
 
 try:
     from google.protobuf.descriptor_pb2 import FileOptions
@@ -16,41 +16,24 @@ except ImportError:
     HAS_PROTOBUF=False
     
 if HAS_PROTOBUF:
-    from voom.codecs.protobuf_codec import ProtobufCodec
-
-
-
-class Test(unittest.TestCase):
-
-
-    def setUp(self):
-        pass
-
-
-    def tearDown(self):
-        pass
-
-
-    def testName(self):
-        pass
-
+    from voom.codecs.protobuf_codec import MIMEProtobufBinaryCodec
 
 
 class TestMIME(unittest.TestCase):
     def test_json(self):
-        supported = ContentCodecRegistry([JSONCodec()])
+        supported = [MIMEJSONCodec()]
         self.run_it(supported, [range(0, 10)])
 
     def test_pickle(self):
-        supported = ContentCodecRegistry([PickleCodec()])
+        supported = [MIMEPickleCodec()]
         self.run_it(supported, [range(0, 10)])
 
     def test_protobuf(self):
         if not HAS_PROTOBUF:
             return
-        codec = ProtobufCodec()
+        codec = MIMEProtobufBinaryCodec()
         codec.registry['google.protobuf.FileOptions'] = FileOptions
-        supported = ContentCodecRegistry([codec])
+        supported = [codec]
         obj = FileOptions()
         obj.java_package = "com.meow"
         self.run_it(supported, [obj])
@@ -58,9 +41,9 @@ class TestMIME(unittest.TestCase):
     def test_mixed(self):
         if not HAS_PROTOBUF:
             return
-        codec = ProtobufCodec()
+        codec = MIMEProtobufBinaryCodec()
         codec.registry['google.protobuf.FileOptions'] = FileOptions
-        supported = ContentCodecRegistry([JSONCodec(), codec])
+        supported = [MIMEJSONCodec(), codec]
 
         obj = FileOptions()
         obj.java_package = "com.meow"
@@ -72,9 +55,9 @@ class TestMIME(unittest.TestCase):
 
         addr = "where"
         headers = {'To': addr, 'Meow': 'yes'}
-        msg_str = codec.encode(objs, headers)
+        msg_str = codec.encode_message(objs, headers)
         print msg_str
-        _headers, parts = codec.decode(msg_str)
+        _headers, parts = codec.decode_message(msg_str)
         assert len(parts) == len(objs)
         assert parts == objs, parts
         for header in headers:

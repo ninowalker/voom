@@ -7,9 +7,10 @@ Created on Mar 13, 2013
 import google.protobuf.message
 import importlib
 from email.mime.application import MIMEApplication
+from voom.codecs import TypeCodec
 
 
-class ProtobufCodec(object):
+class ProtobufBinaryCodec(TypeCodec):
     # https://groups.google.com/d/msg/protobuf/VAoJ-HtgpAI/mzWkRlIptBsJ
     MIME_SUBTYPE = "vnd.google.protobuf"
     
@@ -22,14 +23,7 @@ class ProtobufCodec(object):
     
     def mimetypes(self):
         return ["application/" + self.MIME_SUBTYPE]
-        
-    def encode_mime_part(self, obj):
-        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE, proto=obj.DESCRIPTOR.full_name)
-    
-    def decode_mime_part(self, part):
-        payload = part.get_payload(decode=True)
-        return self.decode(payload, part.get_param('proto'))
-        
+                
     def encode(self, obj, include_type=True):
         s = obj.SerializeToString()
         if not self.message_type or include_type:
@@ -68,3 +62,12 @@ class ProtobufCodec(object):
         mod = importlib.import_module(mod_name)
         klass = getattr(mod, cls_name)
         return klass
+
+
+class MIMEProtobufBinaryCodec(ProtobufBinaryCodec):
+    def encode_part(self, obj):
+        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE, proto=obj.DESCRIPTOR.full_name)
+    
+    def decode_part(self, part):
+        msg_type = part.get_param('proto')
+        return self.decode(part.get_payload(decode=True), msg_type or self.message_type)

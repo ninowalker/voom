@@ -5,7 +5,7 @@ from voom.amqp.gateway import AMQPGateway
 import pika
 from voom.bus import VoomBus
 from voom.codecs import ContentCodecRegistry
-from voom.codecs.json_codec import JSONCodec
+from voom.codecs.json_codec import JSONCodec, MIMEJSONCodec, JSONMessageCodec
 from voom.amqp.events import AMQPDataReceived, AMQPGatewayReady
 from voom.decorators import receiver
 from voom.context import SessionKeys
@@ -24,7 +24,7 @@ class TestRoundtrip(unittest.TestCase):
                         pika.ConnectionParameters(host='localhost'),
                         [work],
                         VoomBus(),
-                        ContentCodecRegistry([JSONCodec()]))
+                        ContentCodecRegistry(JSONMessageCodec()))
         
         bus = g.bus
         bus.raise_errors = True
@@ -38,12 +38,12 @@ class TestRoundtrip(unittest.TestCase):
                 properties = pika.BasicProperties(content_type='application/json',
                                                   content_encoding='zip',
                                                   reply_to=g.return_queue.queue)
-                g.send(range(0, 100), properties, exchange='', routing_key=g.return_queue.queue)
+                g.send([range(0, 100)], properties, exchange='', routing_key=g.return_queue.queue)
                 return
             if len(self.msgs) == 2:
                 assert bus.session[SessionKeys.RESPONDER]
                 #print bus.session.keys()
-                bus.reply(msg.messages[0])
+                bus.reply([msg.messages[0]])
                 return
             
             bus.publish(GatewayShutdownCmd())
@@ -52,7 +52,7 @@ class TestRoundtrip(unittest.TestCase):
         def on_ready(msg):
             properties = pika.BasicProperties(content_type='application/json',
                                               reply_to=g.return_queue.queue)
-            g.send(range(0, 10), properties, exchange='', routing_key=work.queue)
+            g.send([range(0, 10)], properties, exchange='', routing_key=work.queue)
             
         bus.register(receives)
         bus.register(on_ready)

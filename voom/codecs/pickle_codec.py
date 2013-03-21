@@ -4,13 +4,14 @@ Created on Mar 13, 2013
 @author: nino
 '''
 from email.mime.application import MIMEApplication
+from voom.codecs import TypeCodec
 
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
-class PickleCodec(object):
+class PickleCodec(TypeCodec):
     """
     Warning The pickle module is not intended to be secure against erroneous or 
     maliciously constructed data. Never unpickle data received from an untrusted
@@ -27,18 +28,19 @@ class PickleCodec(object):
     
     def mimetypes(self):
         return ["application/" + self.MIME_SUBTYPE]
-    
-    def encode_mime_part(self, obj):
-        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE, protocol=str(self.protocol))
-    
-    def decode_mime_part(self, part):
-        protocol = int(part.get_param("protocol"))
-        payload = part.get_payload(decode=True)
-        return self.decode(payload, protocol)
-        
+            
     def encode(self, obj):
         return pickle.dumps(obj, self.protocol)
         
     def decode(self, input, protocol=None):
         protocol = self.protocol if protocol is None else protocol
         return pickle.loads(input)
+    
+class MIMEPickleCodec(PickleCodec):
+    def encode_part(self, obj):
+        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE, protocol=str(self.protocol))
+    
+    def decode_part(self, part):
+        protocol = int(part.get_param("protocol"))
+        payload = part.get_payload(decode=True)
+        return self.decode(payload, protocol)

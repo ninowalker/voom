@@ -4,6 +4,7 @@ Created on Mar 13, 2013
 @author: nino
 '''
 from email.mime.application import MIMEApplication
+from voom.codecs import TypeCodec, MessageCodec
 
 try:
     import anyjson
@@ -15,7 +16,7 @@ except ImportError:
     dumps = json.dumps
     
     
-class JSONCodec(object):
+class JSONCodec(TypeCodec):
     MIME_SUBTYPE = "json"
     
     def supported_types(self):
@@ -24,17 +25,33 @@ class JSONCodec(object):
     def mimetypes(self):
         return ["application/" + self.MIME_SUBTYPE]
     
-    def encode_mime_part(self, obj):
-        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE)
-    
-    def decode_mime_part(self, part):
-        return self.decode(part.get_payload(decode=True))
-    
     def encode(self, obj):
         return dumps(obj)
         
     def decode(self, input):
         return loads(input)
     
-    def decode_message(self, body):
-        return {}, [self.decode(body)]
+class JSONMessageCodec(MessageCodec):
+    supported = [JSONCodec()]
+    
+    def mimetypes(self):
+        return ["application/json"]
+    
+    def encode_message(self, parts, headers):
+        return dumps(dict(parts=parts, headers=headers))
+    
+    def decode_message(self, str_or_fp):
+        if hasattr(str_or_fp, 'read'):
+            msg = loads(str_or_fp.read())
+        else:
+            msg = loads(str_or_fp)
+        return msg['headers'], msg['parts']
+
+    
+class MIMEJSONCodec(JSONCodec):
+    def encode_part(self, obj):
+        return MIMEApplication(self.encode(obj), self.MIME_SUBTYPE)
+    
+    def decode_part(self, part):
+        return self.decode(part.get_payload(decode=True))
+    
