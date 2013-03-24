@@ -1,7 +1,6 @@
 import codecs
-import importlib
-        
-        
+
+
 class ContentCodecRegistry(object):
     """A repository of codecs for parsing and unparsing MIME formats."""
     def __init__(self, *codecs):
@@ -18,14 +17,14 @@ class ContentCodecRegistry(object):
                     return c
                 return c
         return None
-            
+
     def get_by_content_type(self, type):
         if type in self.type_to_codec:
             return self.type_to_codec[type]
-        
+
         type = type.split("/", 1)[0] + "/*"
         return self.type_to_codec[type]
-    
+
     @property
     def supported(self):
         return self.type_to_codec.keys()
@@ -36,11 +35,11 @@ class MessageCodec(object):
         supported = supported + getattr(self, 'supported', [])
         codecs_registry = ContentCodecRegistry(*supported)
         self.codecs_registry = codecs_registry
-    
+
     def mimetypes(self):
         """Content types handled"""
-        abstract #@UndefinedVariable
-        
+        abstract  # @UndefinedVariable
+
     def encode_message(self, parts, headers):
         """Transforms a list of parts into a serialized string with 
         the associated headers.
@@ -48,16 +47,16 @@ class MessageCodec(object):
         :param list parts: list of objects to be encoded
         :param dict headers: headers to include in the message
         """
-        abstract #@UndefinedVariable
-    
+        abstract  # @UndefinedVariable
+
     def decode_message(self, str_or_fp):
         """Converts a string/file object into a set of headers and decoded parts."""
-        abstract #@UndefinedVariable
-        
+        abstract  # @UndefinedVariable
+
     def _encode_part(self, part):
         codec = self.codecs_registry.search(part)
         return codec.encode_part(part)
-    
+
     def _decode_part(self, part, content_type):
         codec = self.codecs_registry.get_by_content_type(content_type)
         return codec.decode_part(part)
@@ -66,20 +65,20 @@ class MessageCodec(object):
 class TypeCodec(object):
     def mimetypes(self):
         """Content types handled"""
-        abstract #@UndefinedVariable
+        abstract  # @UndefinedVariable
 
     def encode_part(self, obj):
-        abstract #@UndefinedVariable
-        
+        abstract  # @UndefinedVariable
+
     def decode_part(self, part, content_type):
-        abstract #@UndefinedVariable
+        abstract  # @UndefinedVariable
 
 """
 Provides a simpole extensible way to add additional string codecs to the standard
 codecs library.
 """
 _STRING_CODECS = {}
-        
+
 def lookup(encoding):
     return _STRING_CODECS.get(encoding)
 
