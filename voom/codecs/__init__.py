@@ -17,14 +17,15 @@ class ContentCodecRegistry(object):
                     return c
                 return c
         return None
+            
+    def get_by_content_type(self, type_):
+        type_ = type_.split(";")[0].strip()
+        if type_ in self.type_to_codec:
+            return self.type_to_codec[type_]
 
-    def get_by_content_type(self, type):
-        if type in self.type_to_codec:
-            return self.type_to_codec[type]
-
-        type = type.split("/", 1)[0] + "/*"
-        return self.type_to_codec[type]
-
+        type_ = type_.split("/", 1)[0] + "/*"
+        return self.type_to_codec[type_]
+    
     @property
     def supported(self):
         return self.type_to_codec.keys()

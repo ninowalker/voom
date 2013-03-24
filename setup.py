@@ -37,7 +37,7 @@ setup(
     packages=find_packages(exclude=['tests']),
     long_description=read(README),
     setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 
-                    'mock', 'pika', 'protobuf'],
+                    'mock', 'pika', 'protobuf', 'protobuf_to_dict'],
     test_suite = 'nose.collector',
     classifiers=[
         "License :: OSI Approved :: BSD License",
