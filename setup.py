@@ -38,6 +38,7 @@ setup(
     long_description=read(README),
     setup_requires=['nose>=1.0', 'coverage', 'nosexcover', 
                     'mock', 'pika', 'protobuf', 'protobuf_to_dict>=0.0.6'],
+    dependency_links = ['http://github.com/Livefyre/protobuf-to-dict/tarball/master#egg=protobuf_to_dict-0.0.6'],
     test_suite = 'nose.collector',
     classifiers=[
         "License :: OSI Approved :: BSD License",
