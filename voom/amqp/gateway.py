@@ -20,6 +20,8 @@ import sys
 from voom.context import SessionKeys
 import urlparse
 from voom.amqp.headers import Headers
+import threading
+import functools
 
 LOG = getLogger(__name__)
 
@@ -45,7 +47,8 @@ class AMQPGateway(object):
         self.sender = None
         self.connection = None
         self.channel = None
-
+        self._ioloop_thread = threading.current_thread()
+        
         # define the consumers: one per queue
         queues = list(queues)
         queues.append(self.return_queue)
@@ -116,6 +119,22 @@ class AMQPGateway(object):
                   exchange='')
 
     def send(self, message, properties, **kwargs):
+        """Sends a message using the active sender. Because the sender is 
+        running on an IOLoop owned by the connection, we need to queue onto
+        the IOLoop if we are in a different thread.
+        
+        :param message: the message to send. Serialization will be handled by
+           the sender.
+        :param properties: an instance of `pika.BasicProperties`
+        """
+        cthread = threading.current_thread()
+        if self._ioloop_thread != cthread:
+            self.connection.ioloop.add_timeout(0, functools.partial(self.send, message, properties, sending_thread=cthread, **kwargs))
+            LOG.info("send called from thread %r" % cthread)
+            return
+        sending_thread = kwargs.pop('sending_thread', None)
+        if sending_thread:
+            LOG.info("sending message queued from thread %r" % sending_thread)
         self.sender.send(message, properties, **kwargs)
 
     def on_receive(self, event):
