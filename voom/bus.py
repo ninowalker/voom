@@ -77,6 +77,8 @@ class VoomBus(object):
         self.state._deferred.append(MessageEnvelope(msg))
 
     def get_reply_context(self):
+        """Get a reply context suitable for passing to reply(). Use
+        this to reply to a message outside of its Bus session."""
         return ReplyContext(self.session.get(SessionKeys.REPLY_TO),
                             self.session.get(SessionKeys.RESPONDER),
                             self._current_thread_channel)

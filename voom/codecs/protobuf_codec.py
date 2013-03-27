@@ -51,6 +51,9 @@ class ProtobufBinaryCodec(TypeCodec):
         obj.ParseFromString(input[pos:])
         return obj
 
+    def imp(self, mod_name, _from):
+        return __import__(mod_name, globals(), locals(), [_from])
+
     def get_class(self, type):
         """Resolve a python class from the protobuf full_name"""
         if type in self.registry:
@@ -59,7 +62,7 @@ class ProtobufBinaryCodec(TypeCodec):
         mod_name, cls_name = type.rsplit('.', 1)
         mod_name += '_pb2'
 
-        return getattr(__import__(mod_name, globals(), locals(), [cls_name]), cls_name)
+        return getattr(self.imp(mod_name, cls_name), cls_name)
 
 
 class MIMEProtobufBinaryCodec(ProtobufBinaryCodec):
