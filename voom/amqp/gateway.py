@@ -11,7 +11,7 @@ import socket
 import os
 import uuid
 from voom.amqp.config import AMQPInitializer, AMQPConfigSpec, \
-    AMQPConsumerDescriptor, AMQPQueueDescriptor
+    AMQPConsumerDescriptor, AMQPQueueDescriptor, AMQPBindDescriptor
 import time
 from voom.amqp.sender import AMQPSender
 from voom.amqp.events import AMQPGatewayReady, AMQPSenderReady, AMQPDataReceived, \
@@ -27,6 +27,13 @@ LOG = getLogger(__name__)
 
 
 class AMQPGateway(object):
+    """A Gateway."""
+
+    MY_QUEUE = object()
+    """An identifier used as the `queue` value of an `AMQPBindDescriptor`
+    that causes it to be mapped to the return queue of an instantiated
+    gateway."""
+
     def __init__(self,
                  app_name,
                  connection_params,
@@ -48,10 +55,15 @@ class AMQPGateway(object):
         self.connection = None
         self.channel = None
         self._ioloop_thread = threading.current_thread()
-        
+
         # define the consumers: one per queue
         queues = list(queues)
         queues.append(self.return_queue)
+        for i, binding in enumerate(bindings or []):
+            if binding.queue == self.MY_QUEUE:
+                bindings[i] = AMQPBindDescriptor(self.return_queue.queue,
+                                                 binding.exchange,
+                                                 **binding.bind_params)
 
         consumers = []
         for queue in queues:
@@ -68,9 +80,7 @@ class AMQPGateway(object):
                                    queues=queues,
                                    exchanges=exchanges,
                                    bindings=bindings,
-                                   consumers=consumers
-                                   )
-
+                                   consumers=consumers)
 
     def run(self):
         """Starts all of the machinery for consuming and replying to messages sent to
