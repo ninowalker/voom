@@ -8,6 +8,7 @@ InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "st
 
 ReplyContext = namedtuple("ReplyContext", ["reply_to", "responder", "thread_channel"])
 
+
 class BusState(object):
     """A thread local state object."""
     def __init__(self):

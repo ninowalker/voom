@@ -23,12 +23,14 @@ class VoomBus(object):
     # : Key used to subscribe to ALL failures
     ERRORS = object()
 
-    def __init__(self, verbose=False, raise_errors=False):
+    def __init__(self, verbose=False, raise_errors=False, loader=None):
+        self.resetConfig()
         self._state = threading.local()
         self._verbose = verbose
         self.raise_errors = raise_errors
         self._current_thread_channel = CurrentThreadChannel()
-        self.resetConfig()
+        if loader:
+            self.loader = loader
 
     def resetConfig(self):
         self._global_handlers = []
