@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 """A wrapper passed internally by the bus."""
+import threading
 MessageEnvelope = namedtuple("MessageEnvelope", ["body"])
 
 """A container for details about a message + failed handler"""
@@ -52,3 +53,7 @@ class SessionKeys(object):
     GATEWAY_HEADERS = "_gateway_headers"
     REPLY_SENDER = "_reply_sender"
     REPLY_TO = "_reply_to"
+
+
+class SessionDataContext(threading.local):
+    data = None

@@ -7,7 +7,7 @@ import bisect
 import sys
 import traceback
 from voom.context import MessageEnvelope, \
-    InvocationFailure, BusState, SessionKeys, ReplyContext
+    InvocationFailure, BusState, SessionKeys, ReplyContext, SessionDataContext
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError, \
     InvalidStateError
 from voom.priorities import BusPriority  # @UnusedImport
@@ -27,8 +27,8 @@ class VoomBus(object):
     def __init__(self, verbose=False, raise_errors=False, loader=None):
         self.resetConfig()
         self._state = threading.local()
-        self._session_data = threading.local()
-        self._session_data.data = None
+        self._session_data = SessionDataContext()
+        self._session_data
         self._verbose = verbose
         self.raise_errors = raise_errors
         self._current_thread_channel = CurrentThreadChannel()
