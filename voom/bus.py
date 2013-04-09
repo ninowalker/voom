@@ -13,6 +13,7 @@ from voom.exceptions import AbortProcessing, BusError, InvalidAddressError, \
 from voom.priorities import BusPriority  # @UnusedImport
 from voom.local import CurrentThreadChannel
 from voom.events import MessageForwarded
+from contextlib import contextmanager
 
 LOG = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ class VoomBus(object):
     def __init__(self, verbose=False, raise_errors=False, loader=None):
         self.resetConfig()
         self._state = threading.local()
+        self._session_data = threading.local()
+        self._session_data.data = None
         self._verbose = verbose
         self.raise_errors = raise_errors
         self._current_thread_channel = CurrentThreadChannel()
@@ -68,6 +71,29 @@ class VoomBus(object):
     @property
     def session(self):
         return self.state.session if self.state else None
+
+    @contextmanager
+    def session_data(self, session_data):
+        """Provide a context manager such that the session data will be added to
+        any message sent within the invoking context.
+        """
+        if self.session:
+            self.session.update(session_data)
+            yield
+            return
+
+        # store and forward
+        data = self._session_data.data
+        nested = data is not None
+        if not nested:
+            data = {}
+        data.update(session_data)
+        self._session_data.data = data
+        try:
+            yield
+        finally:
+            if not nested:
+                self._session_data.data = None
 
     def publish(self, body, session_vars=None):
         self._load()
@@ -170,6 +196,8 @@ class VoomBus(object):
 
         if root_event:
             self.state = BusState()
+            if self._session_data.data:
+                self.state.session.update(self._session_data.data)
 
         if session_vars:
             self.session.update(session_vars)
