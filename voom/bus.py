@@ -95,9 +95,39 @@ class VoomBus(object):
             if not nested:
                 self._session_data.data = None
 
+    @contextmanager
+    def transaction(self, session_vars=None):
+        """This context manager provides a means for executing a block of code
+        which may emit messages while deferring the actual send until execution ends.
+        This is necessary, for example for handling persistence of a group of objects
+        which emit their own messages.
+
+        >>> bus = VoomBus()
+        >>> with bus.transaction() as (nested, state):
+        ...     save_and_publish()
+        ...     save_and_publish()
+
+        In the example above, both saves would have transpired before
+        the first message is published.
+        """
+        # if we're nested, sub-messages
+        if self.state is not None:
+            if session_vars:
+                self.state.session.update(session_vars)
+            yield True, self.state
+            return
+        self.state = BusState()
+
+        if session_vars:
+            self.state.session.update(session_vars)
+        try:
+            yield False, self.state
+        finally:
+            self._consume()
+
     def publish(self, body, session_vars=None):
         self._load()
-        self._send_loop(MessageEnvelope(body), session_vars)
+        self._send_message(MessageEnvelope(body), session_vars)
 
     def defer(self, msg):
         """Enqueue a message that is sent contingent on the current message 
@@ -189,7 +219,7 @@ class VoomBus(object):
         """Injection point for doing special things before or after the callback."""
         callback(message_envelope.body)
 
-    def _send_loop(self, message, session_vars):
+    def _send_message(self, message, session_vars):
         # if the queue is not empty, we are in a transaction,
         # so queue it up and it will be processed in the invoking loop.
         root_event = self.state is None
@@ -201,29 +231,30 @@ class VoomBus(object):
 
         if session_vars:
             self.session.update(session_vars)
-
         self.state.enqueue(message)
-
         if not root_event:
             return
+        self._consume()
 
+    def _consume(self):
         # this must be absolutely bullet proof
         # and we must leave this function with an
         # empty queue or we corrupt the bus.
+        msg = None
         try:
             for msg in self.state.consume_messages():
                 self.state.current_message = msg
-                self._send_msg(msg)
+                self._dispatch(msg)
         except Exception, e:
             if self.raise_errors:
                 raise
-            raise BusError, (message, e), sys.exc_info()[2]
+            raise BusError, (msg, e), sys.exc_info()[2]
         finally:
             if not self.state.is_queue_empty():
                 LOG.error("Exiting send with queued item; something is terminally wrong.")
             self.state = None
 
-    def _send_msg(self, message, queue=None):
+    def _dispatch(self, message, queue=None):
         if queue == None:
             queue = list(heapq.merge(self._global_handlers, self._message_handlers[type(message.body)]))
         try:
@@ -255,7 +286,7 @@ class VoomBus(object):
 
         while self.state._deferred:
             LOG.info("sending queued_message")
-            self._send_loop(self.state._deferred.pop(0), None)
+            self._send_message(self.state._deferred.pop(0), None)
 
     def _send_error(self, message, source, exception=None, tb=None):
         if exception:
@@ -268,7 +299,7 @@ class VoomBus(object):
 
         failure = InvocationFailure(message.body, exception, tb, context[::-1])
         env = MessageEnvelope(failure)
-        self._send_msg(env, queue=self._error_handlers)
+        self._dispatch(env, queue=self._error_handlers)
 
     def _get_handlers(self, message_type):
         if message_type is self.ALL:

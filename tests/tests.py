@@ -14,6 +14,7 @@ from voom.bus import VoomBus, BusPriority
 from voom.exceptions import BusError, AbortProcessing
 from nose.tools import assert_raises #@UnresolvedImport
 from mock import Mock, patch
+from voom.context import BusState
 
 
 class BaseTest(unittest.TestCase):
@@ -25,6 +26,7 @@ class TestBasic(BaseTest):
 
     def testDecorators(self):
         self.bus.resetConfig()
+
         @receiver(str)
         def foo(msg):
             pass
@@ -57,6 +59,7 @@ class TestBasic(BaseTest):
         self.foo_ = None
         self.all_ = None
         self.obj_ = None
+
         def foo(msg):
             self.foo_ = msg
 
@@ -100,6 +103,7 @@ class TestBasic(BaseTest):
 
         self.bus.unsubscribe(str, foo_async)
 
+
 class TestPriority(BaseTest):
     def test1(self):
         msgs = []
@@ -123,7 +127,7 @@ class TestPriority(BaseTest):
 
         def hi(s):
             return msgs.append(0)
-        self.bus.subscribe(str, hi, priority=BusPriority.LOW_PRIORITY+1)
+        self.bus.subscribe(str, hi, priority=BusPriority.LOW_PRIORITY + 1)
         msgs = []
         self.bus.publish("frackle")
         assert msgs == [1, 2, 3, 0], msgs
@@ -392,8 +396,51 @@ class TestWithContext(unittest.TestCase):
 
         session = {}
 
-        bus.subscribe(bus.ALL, lambda x: session.update(bus.session))
+        bus.subscribe(bus.ALL, lambda _: session.update(bus.session))
 
         func1()
         data1.update(data2)
         assert session == data1, session
+
+
+class TestWithTransaction(unittest.TestCase):
+    def test_nesting(self):
+        bus = VoomBus()
+        with bus.transaction() as (nested, state):
+            assert not nested
+            assert state is not None
+            assert isinstance(state, BusState)
+
+            with bus.transaction() as (nested2, state2):
+                assert nested2
+                assert state2 == state
+
+    def test_send_on_exit(self):
+        bus = VoomBus()
+        self.msgs = []
+        bus.subscribe(bus.ALL, self.msgs.append)
+
+        with bus.transaction() as (nested, state):
+            bus.publish(1, dict(a=1))
+            assert not self.msgs
+            assert isinstance(state, BusState)
+            assert not state.is_queue_empty()
+
+        assert self.msgs == [1]
+        assert state.is_queue_empty()
+
+    def test_send_on_error(self):
+        bus = VoomBus()
+        self.msgs = []
+        bus.subscribe(bus.ALL, self.msgs.append)
+
+        with nose.tools.assert_raises(ValueError):
+            with bus.transaction() as (nested, state):
+                bus.publish(1, dict(a=1))
+                assert not self.msgs
+                int("a")
+                bus.publish(1, dict(a=1))
+
+        assert self.msgs == [1]
+        assert state.is_queue_empty()
+        assert state.session == dict(a=1)
