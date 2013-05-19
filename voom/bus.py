@@ -24,12 +24,12 @@ class VoomBus(object):
     # : Key used to subscribe to ALL failures
     ERRORS = object()
 
-    def __init__(self, verbose=False, raise_errors=False, loader=None):
+    def __init__(self, verbose=False, raise_errors=False, loader=None, state_cls=BusState):
         self.resetConfig()
         self._state = threading.local()
         self._session_data = SessionDataContext()
-        self._session_data
         self._verbose = verbose
+        self._state_cls = state_cls
         self.raise_errors = raise_errors
         self._current_thread_channel = CurrentThreadChannel()
         if loader:
@@ -59,6 +59,10 @@ class VoomBus(object):
     @property
     def state(self):
         return getattr(self._state, 'state', None)
+
+    @property
+    def message_context(self):
+        return self.state.current_message_context
 
     @state.setter
     def state(self, value):
@@ -116,7 +120,7 @@ class VoomBus(object):
                 self.state.session.update(session_vars)
             yield True, self.state
             return
-        self.state = BusState()
+        self.state = self.create_state(None, session_vars)
 
         if session_vars:
             self.state.session.update(session_vars)
@@ -125,14 +129,14 @@ class VoomBus(object):
         finally:
             self._consume()
 
-    def publish(self, body, session_vars=None):
+    def publish(self, body, session_vars=None, message_context=None):
         self._load()
-        self._send_message(MessageEnvelope(body), session_vars)
+        self._send_message(MessageEnvelope(body, message_context), session_vars)
 
-    def defer(self, msg):
+    def defer(self, msg, message_context=None):
         """Enqueue a message that is sent contingent on the current message 
         completing all handlers without aborting."""
-        self.state._deferred.append(MessageEnvelope(msg))
+        self.state._deferred.append(MessageEnvelope(msg, message_context))
 
     def get_reply_context(self):
         """Get a reply context suitable for passing to reply(). Use
@@ -217,7 +221,18 @@ class VoomBus(object):
 
     def invoke(self, callback, message_envelope):
         """Injection point for doing special things before or after the callback."""
-        callback(message_envelope.body)
+        try:
+            self.state.current_message_context = message_envelope.context
+            callback(message_envelope.body)
+        finally:
+            self.state.current_message_context = None
+
+    def create_state(self, root_message, session_vars): #@UnusedVariable
+        """Provides a hook for creating/populating state."""
+        s = self._state_cls()
+        if self._session_data.data:
+            s.session.update(self._session_data.data)
+        return s
 
     def _send_message(self, message, session_vars):
         # if the queue is not empty, we are in a transaction,
@@ -225,9 +240,7 @@ class VoomBus(object):
         root_event = self.state is None
 
         if root_event:
-            self.state = BusState()
-            if self._session_data.data:
-                self.state.session.update(self._session_data.data)
+            self.state = self.create_state(message, session_vars)
 
         if session_vars:
             self.session.update(session_vars)
@@ -262,7 +275,11 @@ class VoomBus(object):
                 try:
                     if self._verbose:
                         LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
-                    self.invoke(callback, message)
+                    self.state.current_message_context = message.context
+                    try:
+                        self.invoke(callback, message)
+                    finally:
+                        self.state.current_message_context = None
                 except AbortProcessing:
                     raise
                 except Exception, ex:
@@ -298,7 +315,7 @@ class VoomBus(object):
             context.pop(0)
 
         failure = InvocationFailure(message.body, exception, tb, context[::-1])
-        env = MessageEnvelope(failure)
+        env = MessageEnvelope(failure, message.context)
         self._dispatch(env, queue=self._error_handlers)
 
     def _get_handlers(self, message_type):

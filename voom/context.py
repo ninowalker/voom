@@ -2,7 +2,7 @@ from collections import namedtuple
 
 """A wrapper passed internally by the bus."""
 import threading
-MessageEnvelope = namedtuple("MessageEnvelope", ["body"])
+MessageEnvelope = namedtuple("MessageEnvelope", ["body", "context"])
 
 """A container for details about a message + failed handler"""
 InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
@@ -15,6 +15,7 @@ class BusState(object):
     def __init__(self):
         self.session = Session()
         self.current_message = None
+        self.current_message_context = None
         self._deferred = []
         self._queued_messages = []
 
