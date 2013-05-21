@@ -74,7 +74,7 @@ class VoomBus(object):
 
     @property
     def session(self):
-        return self.state.session if self.state else None
+        return self.state.session if self.state else self._session_data.data
 
     @contextmanager
     def session_data(self, session_data):
