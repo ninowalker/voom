@@ -7,14 +7,14 @@ Created on Nov 18, 2012
 import unittest
 from voom.exceptions import AbortProcessing
 from voom.decorators import receiver
-from voom.context import Session, BusState
+from voom.context import Session, TrxState
 from voom.bus import VoomBus, BusPriority
 from nose.tools import assert_raises #@UnresolvedImport
 
 
 class TestState(unittest.TestCase):
     def test_consume(self):
-        s = BusState()
+        s = TrxState(None)
         i = -1
         for i, m in enumerate(s.consume_messages()):
             pass
@@ -37,7 +37,7 @@ class TestState(unittest.TestCase):
         assert s.is_queue_empty()
 
     def test_consume_and_add(self):
-        s = BusState()
+        s = TrxState(None)
         s.enqueue(1)
         for i, m in enumerate(s.consume_messages()):
             if i < 10:
@@ -106,7 +106,8 @@ class TestContextVars(unittest.TestCase):
     def do1(self, msg):
         self.msg = msg
         self.context = self.bus.message_context
-        self.bus.publish("hello", message_context=self.context + 1)
+        with self.bus.using(self.context + 1, local=True):
+            self.bus.publish("hello")
 
     def do2(self, msg):
         self.msg2 = msg
@@ -116,6 +117,7 @@ class TestContextVars(unittest.TestCase):
         msg = 1
         self.bus.subscribe(int, self.do1)
         self.bus.subscribe(str, self.do2)
-        self.bus.publish(msg, message_context=100)
+        with self.bus.using(100, local=True):
+            self.bus.publish(msg)
         assert self.context == 100
         assert self.context2 == 101

@@ -1,6 +1,6 @@
 import unittest
 from voom.amqp.gateway import AMQPGateway
-from mock import Mock, call
+from mock import Mock, call, MagicMock
 from voom.bus import VoomBus
 import pika
 from voom.codecs import ContentCodecRegistry
@@ -61,6 +61,7 @@ class Test(unittest.TestCase):
 
     def test_on_receive_1(self):
         bus = Mock(spec=VoomBus)
+        bus.using = MagicMock()
         g = AMQPGateway("test_on_complete",
                         Mock(spec=Parameters),
                         [],
@@ -86,11 +87,12 @@ class Test(unittest.TestCase):
         calls = bus.publish.call_args_list
         #bus.send.assert_called_once_with(GatewayMessageDecodeError(event, None, None))
         _call = calls[0][0]
-        assert len(_call) == 2
+        assert len(_call) == 1, _call
         assert isinstance(_call[0], AMQPDataReceived), type(_call[0])
+        assert bus.using.call_count == 1
 
         _event = _call[0]
-        context = _call[1]
+        context = bus.using.call_args[0][0]
 
         headers = _event.headers
         #
@@ -104,6 +106,8 @@ class Test(unittest.TestCase):
 
     def test_on_receive_2(self):
         bus = Mock(spec=VoomBus)
+        bus.using = MagicMock()
+
         g = AMQPGateway("test_on_complete",
                         Mock(spec=Parameters),
                         [],
@@ -128,9 +132,10 @@ class Test(unittest.TestCase):
         assert bus.publish.call_count == 1
         calls = bus.publish.call_args_list
         _call = calls[0][0]
-        assert len(_call) == 2
+        assert len(_call) == 1
         assert isinstance(_call[0], AMQPDataReceived), type(_call[0])
-
+        context = bus.using.call_args[0][0]
+        assert context
         _event = _call[0]
 
     def test_receive_decode_error(self):

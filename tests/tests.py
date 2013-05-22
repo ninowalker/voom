@@ -14,7 +14,7 @@ from voom.bus import VoomBus, BusPriority
 from voom.exceptions import BusError, AbortProcessing
 from nose.tools import assert_raises #@UnresolvedImport
 from mock import Mock, patch
-from voom.context import BusState
+from voom.context import TrxState
 
 
 class BaseTest(unittest.TestCase):
@@ -276,11 +276,11 @@ class TestRaiseErrors(BaseTest):
 
         self.bus.register(thrower)
 
-        with patch.object(self.bus, '_send_error') as ex:
+        with patch.object(self.bus, '_send_error') as ex: #@UndefinedVariable
             ex.side_effect = ValueError
             self.bus.publish("x")
             assert type(ex.call_args_list[0].call_list()[0][0][2]) == ValueError
-        assert self.bus.session is None
+        assert self.bus.trx is None
 
     def test_fatal_exception(self):
         @receiver(str)
@@ -320,19 +320,22 @@ class TestRaiseErrors(BaseTest):
         self.bus.publish("x")
         assert self.a == 1
 
+
 class TestSession(unittest.TestCase):
     def setUp(self):
         self.bus = VoomBus()
 
     def test_1(self):
         session = {}
+
         @receiver(str)
         def doer1(s):
             self.bus.session[s] = True
             session.update(self.bus.session)
 
         self.bus.register(doer1)
-        self.bus.publish("meow", dict(a=1, b=2))
+        with self.bus.using(dict(a=1, b=2)):
+            self.bus.publish("meow")
         assert session == dict(a=1, b=2, meow=True)
 
         session = {}
@@ -374,9 +377,9 @@ class TestWithContext(unittest.TestCase):
     def test1(self):
         bus = VoomBus()
         data = {1: 2}
-        with bus.session_data(data):
-            assert bus._session_data.data == data, bus._session_data.data
-        assert bus._session_data.data is None, bus._session_data.data
+        with bus.using(data):
+            assert bus._trx_proxy.session_future == data, bus._session_data.data
+        assert bus._trx_proxy.session_future is None, bus._session_data.data
 
     def test2(self):
         bus = VoomBus()
@@ -387,11 +390,11 @@ class TestWithContext(unittest.TestCase):
             bus.publish("1")
 
         def func2():
-            with bus.session_data(data2):
+            with bus.using(data2):
                 func3()
 
         def func1():
-            with bus.session_data(data1):
+            with bus.using(data1):
                 func2()
 
         session = {}
@@ -409,7 +412,7 @@ class TestWithTransaction(unittest.TestCase):
         with bus.transaction() as (nested, state):
             assert not nested
             assert state is not None
-            assert isinstance(state, BusState)
+            assert isinstance(state, TrxState)
 
             with bus.transaction() as (nested2, state2):
                 assert nested2
@@ -421,9 +424,10 @@ class TestWithTransaction(unittest.TestCase):
         bus.subscribe(bus.ALL, self.msgs.append)
 
         with bus.transaction() as (nested, state):
-            bus.publish(1, dict(a=1))
+            with bus.using(dict(a=1)):
+                bus.publish(1)
             assert not self.msgs
-            assert isinstance(state, BusState)
+            assert isinstance(state, TrxState)
             assert not state.is_queue_empty()
 
         assert self.msgs == [1]
@@ -434,13 +438,17 @@ class TestWithTransaction(unittest.TestCase):
         self.msgs = []
         bus.subscribe(bus.ALL, self.msgs.append)
 
-        with nose.tools.assert_raises(ValueError):
+        with nose.tools.assert_raises(ValueError): #@UndefinedVariable
             with bus.transaction() as (nested, state):
-                bus.publish(1, dict(a=1))
+                assert not nested
+                with bus.using(dict(a=1)):
+                    assert bus.session == dict(a=1), bus.session
+                    bus.publish(1)
                 assert not self.msgs
                 int("a")
-                bus.publish(1, dict(a=1))
+                with bus.using(dict(a=1)):
+                    bus.publish(1)
 
         assert self.msgs == [1]
         assert state.is_queue_empty()
-        assert state.session == dict(a=1)
+        assert state.session == dict(a=1), state.session
