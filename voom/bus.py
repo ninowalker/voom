@@ -133,10 +133,10 @@ class VoomBus(object):
         self._load()
         self._send_message(MessageEnvelope(body, self._trx_proxy.message_future))
 
-    def defer(self, msg, message_context=None):
+    def defer(self, msg):
         """Enqueue a message that is sent contingent on the current message 
         completing all handlers without aborting."""
-        self.trx._deferred.append(MessageEnvelope(msg, message_context))
+        self.trx._deferred.append(MessageEnvelope(msg, self._trx_proxy.message_future))
 
     def get_reply_context(self):
         """Get a reply context suitable for passing to reply(). Use
