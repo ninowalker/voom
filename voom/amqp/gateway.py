@@ -180,7 +180,8 @@ class AMQPGateway(object):
             return
 
         # send for auditing purposes
-        self.bus.publish(AMQPDataReceived(msgs, headers, body, event), context)
+        with self.bus.using(context):
+            self.bus.publish(AMQPDataReceived(msgs, headers, body, event))
 
     def _on_complete(self, spec, connection, channel):
         """Called by the `AMQPInitializer` after all queues, exchanges, and bindings are configured."""

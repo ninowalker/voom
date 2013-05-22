@@ -2,7 +2,7 @@ from collections import namedtuple
 
 """A wrapper passed internally by the bus."""
 import threading
-MessageEnvelope = namedtuple("MessageEnvelope", ["body"])
+MessageEnvelope = namedtuple("MessageEnvelope", ["body", "context"])
 
 """A container for details about a message + failed handler"""
 InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "stack_trace", "invocation_context"])
@@ -10,13 +10,18 @@ InvocationFailure = namedtuple("InvocationFailure", ["message", "exception", "st
 ReplyContext = namedtuple("ReplyContext", ["reply_to", "responder", "thread_channel"])
 
 
-class BusState(object):
+class TrxState(object):
     """A thread local state object."""
-    def __init__(self):
+    def __init__(self, trx_proxy):
         self.session = Session()
         self.current_message = None
+        self.current_message_context = None
         self._deferred = []
         self._queued_messages = []
+
+        if trx_proxy is not None and trx_proxy.session_future:
+            self.session.update(trx_proxy.session_future)
+            trx_proxy.session_future = None
 
     def consume_messages(self):
         """A destructive iterator for consuming all queued messages."""
@@ -55,5 +60,8 @@ class SessionKeys(object):
     REPLY_TO = "_reply_to"
 
 
-class SessionDataContext(threading.local):
-    data = None
+class TrxProxy(threading.local):
+    state = None
+    session_future = None
+    message_future = None
+
