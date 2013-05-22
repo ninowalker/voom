@@ -101,23 +101,26 @@ class TestHeaders(unittest.TestCase):
 
 class TestContextVars(unittest.TestCase):
     def setUp(self):
-        self.bus = VoomBus()
+        self.bus = VoomBus(raise_errors=True)
+        self.context2 = 0
 
     def do1(self, msg):
         self.msg = msg
-        self.context = self.bus.message_context
-        with self.bus.using(self.context + 1, local=True):
+        self.context = self.bus.message_context['c']
+        with self.bus.using(dict(c=self.context + 1), local=True):
+            with self.bus.using(dict(c=self.context + 2), local=True):
+                self.bus.publish("hello")
             self.bus.publish("hello")
 
     def do2(self, msg):
         self.msg2 = msg
-        self.context2 = self.bus.message_context
+        self.context2 += self.bus.message_context['c']
 
     def test_vars(self):
         msg = 1
         self.bus.subscribe(int, self.do1)
         self.bus.subscribe(str, self.do2)
-        with self.bus.using(100, local=True):
+        with self.bus.using(dict(c=100), local=True):
             self.bus.publish(msg)
         assert self.context == 100
-        assert self.context2 == 101
+        assert self.context2 == 101 + 102
