@@ -68,25 +68,28 @@ class VoomBus(object):
 
     @property
     def session(self):
-        return self.trx.session
+        return self.trx.session if self.trx else self._trx_proxy.session_future
 
     @contextmanager
     def using(self, data, local=False):
         """Provide a context manager for forwarding data to sessions or messages that will be sent
         or updating the session during a transaction
         """
+        if self.trx and not local:
+            self.session.update(data)
+            yield
+            return
+
+        # this is a stack, treat it like one
         if local:
-            self._trx_proxy.message_future = data
+            last = self._trx_proxy.message_future
+            self._trx_proxy.message_future = last.copy() if last else {}
+            self._trx_proxy.message_future.update(data)
             try:
                 yield
                 return
             finally:
-                self._trx_proxy.message_future = None
-
-        if self.trx:
-            self.session.update(data)
-            yield
-            return
+                self._trx_proxy.message_future = last
 
         # store and forward
         nested = True

@@ -21,7 +21,6 @@ class TrxState(object):
 
         if trx_proxy is not None and trx_proxy.session_future:
             self.session.update(trx_proxy.session_future)
-            trx_proxy.session_future = None
 
     def consume_messages(self):
         """A destructive iterator for consuming all queued messages."""
