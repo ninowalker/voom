@@ -36,19 +36,15 @@ class ProtobufBinaryCodec(TypeCodec):
         2) the instance's message_type attribute
         3) encoded in the input as 'messagetype;protobuf_raw_data'
         """
-        pos = input.find(";")
-        if pos == -1:
-            message_type = message_type or self.message_type
-            if not message_type:
-                raise TypeError("no message type")
-            pos = 0
-        else:
-            message_type = input[0:pos]
-            pos += 1
+        if not message_type:
+            message_type, input = input.split(';', 1)
+
+        if not message_type:
+            raise TypeError("no message type")
 
         klass = self.get_class(message_type)
         obj = klass()
-        obj.ParseFromString(input[pos:])
+        obj.ParseFromString(input)
         return obj
 
     def imp(self, mod_name, _from):
