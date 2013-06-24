@@ -167,7 +167,7 @@ class AMQPGateway(object):
             context[SessionKeys.REPLY_TO] = properties.reply_to
             parts = urlparse.urlparse(properties.reply_to)
             if not parts.scheme:
-                context[SessionKeys.RESPONDER] = lambda addr, message: self.reply(properties, message)  # functools.partial(self.reply, properties)
+                context[SessionKeys.RESPONDER] = lambda addr, message: self.reply(properties, message) # functools.partial(self.reply, properties)
 
         try:
             body = event.body
@@ -176,7 +176,8 @@ class AMQPGateway(object):
             _headers, msgs = codec.decode_message(body)
         except Exception, e:
             LOG.exception("failed to handle message: %s", body)
-            self.bus.publish(GatewayMessageDecodeError(event, e, sys.exc_info()[2]), context)
+            with self.bus.using(context):
+                self.bus.publish(GatewayMessageDecodeError(event, e, sys.exc_info()[2]))
             return
 
         # send for auditing purposes

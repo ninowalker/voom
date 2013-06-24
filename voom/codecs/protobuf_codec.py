@@ -30,25 +30,22 @@ class ProtobufBinaryCodec(TypeCodec):
             s = u"%s;%s" % (obj.DESCRIPTOR.full_name, s)
         return s
 
-    def decode(self, input, message_type=None):
+    def decode(self, value, message_type=None):
         """Decodes a protobuf message. Message type is derived from:
         1) the input parameter
         2) the instance's message_type attribute
         3) encoded in the input as 'messagetype;protobuf_raw_data'
         """
-        pos = input.find(";")
-        if pos == -1:
-            message_type = message_type or self.message_type
-            if not message_type:
-                raise TypeError("no message type")
-            pos = 0
-        else:
-            message_type = input[0:pos]
-            pos += 1
+
+        if not message_type and ';' in value:
+            message_type, value = value.split(';', 1)
+
+        if not message_type:
+            raise TypeError("no message type")
 
         klass = self.get_class(message_type)
         obj = klass()
-        obj.ParseFromString(input[pos:])
+        obj.ParseFromString(value)
         return obj
 
     def imp(self, mod_name, _from):

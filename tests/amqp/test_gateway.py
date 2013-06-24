@@ -19,10 +19,23 @@ from voom.amqp.config import AMQPBindDescriptor
 basicConfig()
 
 
+class FakeCtxMgr(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self, *args, **kwargs):
+        pass
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
+
 class Test(unittest.TestCase):
     def test_bind_my_queue(self):
         params = Mock(spec=Parameters)
         bus = Mock(spec=VoomBus)
+        bus.using = FakeCtxMgr()
+
         binding = AMQPBindDescriptor(queue=AMQPGateway.MY_QUEUE, exchange='exchange')
 
         g = AMQPGateway("test_on_complete",
@@ -69,8 +82,8 @@ class Test(unittest.TestCase):
                         ContentCodecRegistry(JSONMessageCodec()))
 
         bus.reset_mock()
-        #codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
-        #codec.decode.return_value =
+        # codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
+        # codec.decode.return_value =
         properties = pika.BasicProperties(reply_to="123",
                                           content_type='application/json',
                                           content_encoding="zip",
@@ -85,7 +98,7 @@ class Test(unittest.TestCase):
         g.on_receive(event)
         assert bus.publish.call_count == 1
         calls = bus.publish.call_args_list
-        #bus.send.assert_called_once_with(GatewayMessageDecodeError(event, None, None))
+        # bus.send.assert_called_once_with(GatewayMessageDecodeError(event, None, None))
         _call = calls[0][0]
         assert len(_call) == 1, _call
         assert isinstance(_call[0], AMQPDataReceived), type(_call[0])
@@ -115,8 +128,8 @@ class Test(unittest.TestCase):
                         ContentCodecRegistry(JSONMessageCodec()))
 
         bus.reset_mock()
-        #codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
-        #codec.decode.return_value =
+        # codec = g.supported_types_registry.get_by_content_type.return_value = Mock()
+        # codec.decode.return_value =
         properties = pika.BasicProperties(reply_to="http://example.com/123",
                                           content_type='application/json',
                                           content_encoding="zip",
@@ -140,6 +153,7 @@ class Test(unittest.TestCase):
 
     def test_receive_decode_error(self):
         bus = Mock(spec=VoomBus)
+        bus.using = FakeCtxMgr
         g = AMQPGateway("test_decode_error",
                         Mock(spec=Parameters),
                         [],
@@ -162,13 +176,10 @@ class Test(unittest.TestCase):
         assert bus.publish.call_count == 1
         calls = bus.publish.call_args_list
         _call = calls[0][0]
-        assert len(_call) == 2
+        assert len(_call) == 1
         assert isinstance(_call[0], GatewayMessageDecodeError), type(_call[0])
 
         _event = _call[0]
-        context = _call[1]
 
         assert isinstance(_event.exception, LookupError)
         assert _event.event == event
-
-        assert callable(context[SessionKeys.RESPONDER])
