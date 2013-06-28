@@ -18,6 +18,10 @@ LOG = logging.getLogger(__name__)
 
 
 class VoomBus(object):
+    """
+    A message dispatching service.
+    """
+
     # : Key used to subscribe to ALL messages
     ALL = object()
     # : Key used to subscribe to ALL failures
@@ -34,6 +38,9 @@ class VoomBus(object):
             self.loader = loader
 
     def resetConfig(self):
+        """
+        Revert to an uninitialized state. Useful for testing.
+        """
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
@@ -56,10 +63,16 @@ class VoomBus(object):
 
     @property
     def trx(self):
+        """
+        Returns the active transaction.
+        """
         return self._trx_proxy.state
 
     @property
     def message_context(self):
+        """
+        Returns the context of the message currently being processed.
+        """
         return self.trx.current_message_context
 
     @property
@@ -129,12 +142,12 @@ class VoomBus(object):
         finally:
             self._consume()
 
-    def publish(self, body):
+    def publish(self, body, priority=None):
         self._load()
-        self._send_message(MessageEnvelope(body, self._trx_proxy.message_future))
+        self._send_message(MessageEnvelope(body, self._trx_proxy.message_future), priority)
 
     def defer(self, msg):
-        """Enqueue a message that is sent contingent on the current message 
+        """Enqueue a message that is sent contingent on the current message
         completing all handlers without aborting."""
         self.trx._deferred.append(MessageEnvelope(msg, self._trx_proxy.message_future))
 
@@ -175,10 +188,10 @@ class VoomBus(object):
 
     def register(self, callback, priority=None, receiver_of=None):
         """Register a function as a handler.
-        @param handler: a callable that accepts a single argument. 
-        @param priority: integer value indicating execution order (desc); if not
+        :param handler: a callable that accepts a single argument.
+        :param priority: integer value indicating execution order (desc); if not
            provided, the callback is inspected for a `_priority` value.
-        @param receiver_of: list or tuple of types; if not provided the 
+        :param receiver_of: list or tuple of types; if not provided the
            callback must have a `_receiver_of` attribute.
         """
         if receiver_of is None:
@@ -227,7 +240,7 @@ class VoomBus(object):
         finally:
             self.trx.current_message_context = None
 
-    def _send_message(self, message):
+    def _send_message(self, message, priority=None):
         # if the queue is not empty, we are in a transaction,
         # so queue it up and it will be processed in the invoking loop.
         root_event = self.trx is None
@@ -235,7 +248,7 @@ class VoomBus(object):
         if root_event:
             self._trx_proxy.state = self._trx_cls(self._trx_proxy)
 
-        self.trx.enqueue(message)
+        self.trx.enqueue(message, priority)
 
         if not root_event:
             return
@@ -253,7 +266,7 @@ class VoomBus(object):
         except Exception, e:
             if self.raise_errors:
                 raise
-            raise BusError, (msg, e), sys.exc_info()[2]
+            raise BusError, (msg, e), sys.exc_info()[2] #@IgnorePep8
         finally:
             if not self.trx.is_queue_empty():
                 LOG.error("Exiting send with queued item; something is terminally wrong.")

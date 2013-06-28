@@ -9,14 +9,13 @@ from voom.exceptions import AbortProcessing
 from voom.decorators import receiver
 from voom.context import Session, TrxState
 from voom.bus import VoomBus, BusPriority
-from nose.tools import assert_raises #@UnresolvedImport
 
 
 class TestState(unittest.TestCase):
     def test_consume(self):
         s = TrxState(None)
         i = -1
-        for i, m in enumerate(s.consume_messages()):
+        for i, _m in enumerate(s.consume_messages()):
             pass
         assert i == -1
         assert s.is_queue_empty()
@@ -25,13 +24,13 @@ class TestState(unittest.TestCase):
         s.enqueue(1)
 
         i = -1
-        for i, m in enumerate(s.consume_messages()):
+        for i, _m in enumerate(s.consume_messages()):
             pass
         assert i == 1
         assert s.is_queue_empty()
 
         i = -1
-        for i, m in enumerate(s.consume_messages()):
+        for i, _m in enumerate(s.consume_messages()):
             pass
         assert i == -1
         assert s.is_queue_empty()
@@ -39,10 +38,39 @@ class TestState(unittest.TestCase):
     def test_consume_and_add(self):
         s = TrxState(None)
         s.enqueue(1)
-        for i, m in enumerate(s.consume_messages()):
+        for i, _m in enumerate(s.consume_messages()):
             if i < 10:
                 s.enqueue(1)
         assert i == 10, i
+
+    def test_consume_heap_order(self):
+        s = TrxState(None)
+        s.enqueue("b", priority=2)
+        s.enqueue("a", priority=1)
+
+        m = ""
+        for _m in s.consume_messages():
+            m += _m
+        assert m == "ab"
+
+        s.enqueue("b", priority=1)
+        s.enqueue("a", priority=2)
+
+        m = ""
+        for _m in s.consume_messages():
+            m += _m
+        assert m == "ba"
+
+    def test_consume_heap_auto_order(self):
+        s = TrxState(None)
+        s.enqueue("b")
+        s.enqueue("a")
+        s.enqueue("!", priority=0)
+
+        m = ""
+        for _m in s.consume_messages():
+            m += _m
+        assert m == "!ba"
 
 
 class TestSession(unittest.TestCase):

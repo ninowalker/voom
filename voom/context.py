@@ -2,6 +2,7 @@ from collections import namedtuple
 
 """A wrapper passed internally by the bus."""
 import threading
+import heapq
 MessageEnvelope = namedtuple("MessageEnvelope", ["body", "context"])
 
 """A container for details about a message + failed handler"""
@@ -18,6 +19,7 @@ class TrxState(object):
         self.current_message_context = None
         self._deferred = []
         self._queued_messages = []
+        self._indx = 1
 
         if trx_proxy is not None and trx_proxy.session_future:
             self.session.update(trx_proxy.session_future)
@@ -25,15 +27,19 @@ class TrxState(object):
     def consume_messages(self):
         """A destructive iterator for consuming all queued messages."""
         while self._queued_messages:
-            yield self._queued_messages.pop()
+            yield heapq.heappop(self._queued_messages)[1]
 
     def is_queue_empty(self):
         """Got messages?"""
         return len(self._queued_messages) == 0
 
-    def enqueue(self, message):
+    def enqueue(self, message, priority=None):
         """Enqueue a message during this session."""
-        self._queued_messages.append(message)
+        if priority is None:
+            indx = self._indx = self._indx + 1
+        else:
+            indx = priority
+        heapq.heappush(self._queued_messages, (indx, message))
 
 
 class Session(dict):
