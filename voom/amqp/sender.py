@@ -15,8 +15,8 @@ class AMQPSender(object):
         self.channel = channel
         self.from_ = from_ or "%s@%s" % (os.getpid(), socket.getfqdn())
         self.supported_content_types = supported_content_types
-                
-    def send(self, 
+
+    def send(self,
              message,
              properties,
              routing_key,
@@ -28,16 +28,15 @@ class AMQPSender(object):
 
         encoder = self.supported_content_types.get_by_content_type(properties.content_type)
         body = encoder.encode_message(message, {})
-        
+
         if properties.content_encoding:
             body = body.encode(properties.content_encoding)
-                
+
         self.channel.basic_publish(exchange=exchange,
                                    routing_key=routing_key,
                                    body=body,
                                    properties=properties)
-        LOG.warning(u"sent %d bytes to routing_key=%s, exchange=%s", len(body), routing_key, exchange)
-    
+
     @classmethod
     def extract_headers(cls, properties):
         headers = {}
@@ -45,10 +44,10 @@ class AMQPSender(object):
             if v is not None:
                 headers[cls._header(k)] = v
         headers.pop('Headers', None)
-        
+
         for k, v in (properties.headers or {}).iteritems():
             headers[k] = v
-        
+
         return headers
 
     @classmethod
