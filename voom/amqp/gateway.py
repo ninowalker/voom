@@ -156,7 +156,6 @@ class AMQPGateway(object):
         codec = self.message_codecs.get_by_content_type(properties.content_type)
 
         headers = AMQPSender.extract_headers(properties)
-        print event.method
         headers['Routing-Key'] = event.method.routing_key
         headers['Exchange'] = event.method.exchange
 
