@@ -3,6 +3,7 @@ from collections import namedtuple
 """A wrapper passed internally by the bus."""
 import threading
 import heapq
+
 MessageEnvelope = namedtuple("MessageEnvelope", ["body", "context"])
 
 """A container for details about a message + failed handler"""
@@ -13,6 +14,7 @@ ReplyContext = namedtuple("ReplyContext", ["reply_to", "responder", "thread_chan
 
 class TrxState(object):
     """A thread local state object."""
+
     def __init__(self, trx_proxy):
         self.session = Session()
         self.current_message = None
@@ -44,12 +46,12 @@ class TrxState(object):
 
 class Session(dict):
     """A bag for storing session variables during a Bus.publish() call."""
+
     def __init__(self, **kwargs):
         self.update(kwargs)
 
 
 class SessionKeys(object):
-
     GATEWAY_EVENT = '_gateway_event'
 
     RESPONDER = "_responder"

@@ -1,13 +1,6 @@
-'''
-Created on Mar 13, 2013
-
-@author: nino
-'''
-
-import google.protobuf.message
-import imp
 from email.mime.application import MIMEApplication
 from voom.codecs import TypeCodec
+import google.protobuf.message
 
 
 class ProtobufBinaryCodec(TypeCodec):

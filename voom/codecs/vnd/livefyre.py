@@ -39,8 +39,8 @@ class LivefyreJSONProtobufCodec(ProtobufBinaryCodec):
         if params['serial'] != self.SERIAL_FORMAT:
             raise TypeError("Unable to decode %s, of content_type='%s'" % (params['serial'], part['Content-Type']))
         klass = self.get_class(params['proto'])
-        return dict_to_protobuf(klass, content, strict=False)        
-        
+        return dict_to_protobuf(klass, content, strict=False)
+
     def _parse_content_type(self, content_type):
         parts = [c.strip() for c in content_type.split(";")]
         content_type = parts.pop(0)
@@ -53,29 +53,29 @@ class LivefyreJSONProtobufCodec(ProtobufBinaryCodec):
 class InlineJSONCodec(JSONCodec):
     def encode_part(self, obj):
         return {'Content-Type': 'application/json', TRANSFER_ENCODING: 'inline'}, obj
-    
+
     def decode_part(self, part):
         content = part[1]
         if part[0][TRANSFER_ENCODING] != 'inline':
             return loads(content)
         return content
 
-    
+
 class LivefyreJSONMessageCodec(JSONMessageCodec):
     TYPE = "message/vnd.livefyre+json"
-    
+
     supported = [InlineJSONCodec(),
                  LivefyreJSONProtobufCodec()]
-    
+
     def mimetypes(self):
         return [self.TYPE]
-    
+
     def encode_message(self, parts, headers):
         headers = headers.copy()
         headers['Content-Type'] = self.TYPE
         _parts = [self._encode_part(part) for part in parts]
         return dumps([headers] + _parts)
-    
+
     def decode_message(self, str_or_fp):
         if hasattr(str_or_fp, 'read'):
             msg = loads(str_or_fp.read())
@@ -83,7 +83,7 @@ class LivefyreJSONMessageCodec(JSONMessageCodec):
             msg = loads(str_or_fp)
         headers = msg.pop(0)
         return headers, [self._decode_part(self._handle_encoding(part), part[0]['Content-Type']) for part in msg]
-    
+
     def _handle_encoding(self, part):
         encoding = part[0].get(TRANSFER_ENCODING)
         if encoding and encoding != 'inline':

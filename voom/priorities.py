@@ -1,8 +1,4 @@
-'''
-Created on Mar 5, 2013
 
-@author: nino
-'''
 
 class BusPriority(object):
     LOW_PRIORITY = 10000

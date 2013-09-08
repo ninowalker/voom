@@ -1,20 +1,14 @@
-'''
-Created on Mar 13, 2013
-
-@author: nino
-'''
-import unittest
+from google.protobuf.descriptor_pb2 import FileOptions
+from mock import Mock
 from voom.codecs.json_codec import MIMEJSONCodec
 from voom.codecs.mime_codec import MIMEMessageCodec
 from voom.codecs.pickle_codec import MIMEPickleCodec
-
-from google.protobuf.descriptor_pb2 import FileOptions
 from voom.codecs.protobuf_codec import MIMEProtobufBinaryCodec, \
     ProtobufBinaryCodec
-
 import google.protobuf.descriptor_pb2
-from mock import Mock
 import nose.tools
+import unittest
+
 
 class TestProtobuf(unittest.TestCase):
     def test_protobuf_1(self):
@@ -58,7 +52,6 @@ class TestMIME(unittest.TestCase):
         obj = FileOptions()
         obj.java_package = "com.meow"
         self.run_it(supported, [obj, {'meow': True}])
-
 
     def run_it(self, supported, objs):
         codec = MIMEMessageCodec(supported)

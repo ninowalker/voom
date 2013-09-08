@@ -314,7 +314,7 @@ class VoomBus(object):
         if exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback)[2:])
-        # find out where send was called from:
+            # find out where send was called from:
         context = traceback.format_stack()[::-1]
         while "/voom/" in context[0]:
             context.pop(0)

@@ -1,22 +1,18 @@
-'''
-Created on Feb 28, 2013
-
-@author: nino
-'''
-import unittest
-import threading
-from voom.local import CurrentThreadChannel
-from voom.bus import VoomBus
-import nose.tools
-from voom.exceptions import InvalidStateError, InvalidAddressError
-from voom.decorators import receiver
-from mock import patch
-from voom.context import SessionKeys
 from logging import basicConfig
+from mock import patch
+from voom.bus import VoomBus
+from voom.context import SessionKeys
+from voom.decorators import receiver
 from voom.events import MessageForwarded
+from voom.exceptions import InvalidStateError, InvalidAddressError
+from voom.local import CurrentThreadChannel
+import nose.tools
+import threading
+import unittest
 
 
 basicConfig()
+
 
 class TestCurrentThreadSendDelegate(unittest.TestCase):
     def test1(self):
@@ -40,8 +36,8 @@ class TestCurrentThreadSendDelegate(unittest.TestCase):
             t.start()
             t.join()
 
-
         assert not d.messages
+
 
 class TestBusReply(unittest.TestCase):
     def setUp(self):

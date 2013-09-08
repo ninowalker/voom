@@ -1,7 +1,5 @@
-
 from logging import getLogger
 import functools
-from voom.priorities import BusPriority
 
 LOG = getLogger('voom.bus')
 
@@ -14,13 +12,14 @@ class MessageHandlerWrapper(object):
     @param function: the message handler 
     @param receives: a list of types this handler handles. 
     """
+
     def __init__(self, function, receives=None, priority=None):
         self._func = function
         self._filter = None
         self._receiver_of = receives
         self._priority = priority
         functools.update_wrapper(self, self._func)
-        
+
     def __call__(self, *args, **kwargs):
         if self._filter:
             if not self._filter(*args, **kwargs):
@@ -31,7 +30,7 @@ class MessageHandlerWrapper(object):
 
     def __repr__(self):
         return "<MessageHandlerWrapper %s>" % repr(self._func)
-    
+
     def filter(self, func):
         """Assign a filter to this handler."""
         self._filter = func

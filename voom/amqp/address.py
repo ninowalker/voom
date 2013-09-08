@@ -1,18 +1,14 @@
-'''
-Created on Mar 10, 2013
-
-@author: nino
-'''
-import urlparse
-from pika.connection import ConnectionParameters, URLParameters, Parameters
+from pika.connection import URLParameters, Parameters
 import urllib
+import urlparse
+
 
 class AMQPAddress(object):
     """
     amqp://host/vhost?routing_key=a_queue
     amqp://guest:guest@host:1234/vhost?routing_key=hello&exchange=_an_exchange
     """
-    
+
     scheme = "amqp"
     params = None
     fragment = None
@@ -27,17 +23,17 @@ class AMQPAddress(object):
             self.netloc = connection_params.host
         if connection_params.port:
             self.netloc = "%s:%s" % (self.netloc, connection_params.port)
-            
+
         if connection_params.virtual_host == '/':
             self.path = '/%2f'
         else:
             self.path = "/%s" % connection_params.virtual_host
 
         self.extras = extras
-        
+
     def get(self, name, default=None):
         return self.extras.get(name, default)
-        
+
     @classmethod
     def parse(cls, url):
         if not url.startswith("amqp:"):
@@ -50,14 +46,14 @@ class AMQPAddress(object):
         if parts.query:
             obj.extras.update({k: v for k, v in urlparse.parse_qsl(parts.query)})
         return obj
-        
+
     def unparse(self, **params_):
         params = {}
         params.update(self.extras)
         params.update(params_)
-        return urlparse.urlunparse((self.scheme, self.netloc, self.path, 
+        return urlparse.urlunparse((self.scheme, self.netloc, self.path,
                                     None, urllib.urlencode(params), None))
-    
+
     def get_parameters(self):
         return URLParameters(self.unparse())
     

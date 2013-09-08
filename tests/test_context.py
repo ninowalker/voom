@@ -1,14 +1,8 @@
-
-'''
-Created on Nov 18, 2012
-
-@author: nino
-'''
-import unittest
-from voom.exceptions import AbortProcessing
-from voom.decorators import receiver
-from voom.context import Session, TrxState
 from voom.bus import VoomBus, BusPriority
+from voom.context import Session, TrxState
+from voom.decorators import receiver
+from voom.exceptions import AbortProcessing
+import unittest
 
 
 class TestState(unittest.TestCase):

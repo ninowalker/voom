@@ -1,14 +1,9 @@
-'''
-Created on Mar 20, 2013
-
-@author: nino
-'''
-import imaplib
-from voom.imap.events import IMAPMessageDownloaded
 from logging import getLogger
+from voom.imap.events import IMAPMessageDownloaded
 import email
+import imaplib
 
-LOG = getLogger(__name__) 
+LOG = getLogger(__name__)
 
 
 class IMAPConsumer(object):
@@ -27,7 +22,7 @@ class IMAPConsumer(object):
         self.on_complete = on_complete or self._on_complete
         self.bus = bus
         self.attach(bus)
-        
+
     def attach(self, bus):
         pass
         #assert isinstance(bus, VoomBus)
@@ -54,7 +49,7 @@ class IMAPConsumer(object):
             except:
                 pass
             conn.logout()
-            
+
     def _on_complete(self, conn, num):
         LOG.debug("marking message read")
         typ, response = conn.store(num, '+FLAGS', r'(\Seen)')
