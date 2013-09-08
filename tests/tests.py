@@ -1,20 +1,13 @@
-'''
-Created on Mar 30, 2012
-
-@author: nino
-'''
-
+from mock import Mock, patch
+from nose.tools import assert_raises #@UnresolvedImport
+from voom.bus import VoomBus, BusPriority
+from voom.context import TrxState
+from voom.decorators import receiver
+from voom.exceptions import BusError, AbortProcessing
+import nose.tools
 import sys
 import unittest
-import nose.tools
 import voom.bus
-
-from voom.decorators import receiver
-from voom.bus import VoomBus, BusPriority
-from voom.exceptions import BusError, AbortProcessing
-from nose.tools import assert_raises #@UnresolvedImport
-from mock import Mock, patch
-from voom.context import TrxState
 
 
 class BaseTest(unittest.TestCase):

@@ -1,11 +1,6 @@
-'''
-Created on Apr 6, 2013
-
-@author: nino
-'''
 from logging import getLogger
-import importlib
 import imp
+import importlib
 
 LOG = getLogger(__name__)
 
@@ -24,7 +19,7 @@ def autodiscover_bus_handlers():
     try:
         LOG.info("Discovering bus handlers...")
         return filter(None, [find_related_module(app, "handlers")
-                                for app in settings.INSTALLED_APPS])
+                             for app in settings.INSTALLED_APPS])
     finally:
         _RACE_PROTECTION = False
 

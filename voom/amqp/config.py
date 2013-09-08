@@ -1,15 +1,10 @@
-'''
-Created on Mar 14, 2013
-
-@author: nino
-'''
 from collections import namedtuple
 from logging import getLogger
-import functools
-import pika
 from voom.amqp.events import AMQPConnectionReady, AMQPChannelReady, \
     AMQPExchangeInitialized, AMQPQueueInitialized, AMQPQueueBound, \
     AMQPConsumerStarted, AMQPRawDataReceived
+import functools
+import pika
 
 LOG = getLogger(__name__)
 

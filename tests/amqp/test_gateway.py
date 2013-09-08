@@ -40,7 +40,7 @@ class Test(unittest.TestCase):
 
         g = AMQPGateway("test_on_complete",
                         params,
-                        [],
+            [],
                         bus,
                         Mock(spec=ContentCodecRegistry),
                         bindings=[binding])
@@ -52,7 +52,7 @@ class Test(unittest.TestCase):
         bus = Mock(spec=VoomBus)
         g = AMQPGateway("test_on_complete",
                         params,
-                        [],
+            [],
                         bus,
                         Mock(spec=ContentCodecRegistry))
 
@@ -66,7 +66,7 @@ class Test(unittest.TestCase):
 
         assert g.sender is not None
         bus.publish.assert_has_calls([call(AMQPSenderReady(g.sender)),
-                                   call(AMQPGatewayReady(g))])
+                                      call(AMQPGatewayReady(g))])
         g.connection.ioloop = Mock(spec=IOLoop)
         g.shutdown()
         g.connection.close.assert_called_with()
@@ -77,7 +77,7 @@ class Test(unittest.TestCase):
         bus.using = MagicMock()
         g = AMQPGateway("test_on_complete",
                         Mock(spec=Parameters),
-                        [],
+            [],
                         bus,
                         ContentCodecRegistry(JSONMessageCodec()))
 
@@ -123,7 +123,7 @@ class Test(unittest.TestCase):
 
         g = AMQPGateway("test_on_complete",
                         Mock(spec=Parameters),
-                        [],
+            [],
                         bus,
                         ContentCodecRegistry(JSONMessageCodec()))
 
@@ -156,7 +156,7 @@ class Test(unittest.TestCase):
         bus.using = FakeCtxMgr
         g = AMQPGateway("test_decode_error",
                         Mock(spec=Parameters),
-                        [],
+            [],
                         bus,
                         ContentCodecRegistry(JSONMessageCodec()))
 

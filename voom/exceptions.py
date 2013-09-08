@@ -1,13 +1,10 @@
-'''
-Created on Nov 17, 2012
 
-@author: nino
-'''
 
 class BusError(Exception):
     """Propagates in the extremely rare situation that bus
     execution logics errors out.
-    """ 
+    """
+
     def __init__(self, msg, cause):
         super(BusError, self).__init__(msg)
         self.cause = cause

@@ -1,8 +1,3 @@
-'''
-Created on Mar 15, 2013
-
-@author: nino
-'''
 from logging import getLogger
 import os
 import socket

@@ -8,10 +8,10 @@ import collections
 
 
 class Headers(collections.MutableMapping):
-    '''
+    """
     A dictionary implementation that allows case-insensitive
     lookups while preserving the case of the original key names.
-    '''
+    """
     def __init__(self, initial=None):
         self._dict = {}
 

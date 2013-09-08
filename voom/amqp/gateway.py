@@ -1,27 +1,22 @@
-'''
-Created on Mar 11, 2013
-
-@author: nino
-'''
 from logging import getLogger
-import pika
-from voom.gateway import GatewayShutdownCmd, GatewayMessageDecodeError
-from voom.priorities import BusPriority
-import socket
-import os
-import uuid
 from voom.amqp.config import AMQPInitializer, AMQPConfigSpec, \
     AMQPConsumerDescriptor, AMQPQueueDescriptor, AMQPBindDescriptor
-import time
-from voom.amqp.sender import AMQPSender
 from voom.amqp.events import AMQPGatewayReady, AMQPSenderReady, AMQPDataReceived, \
     AMQPRawDataReceived
-import sys
-from voom.context import SessionKeys
-import urlparse
 from voom.amqp.headers import Headers
-import threading
+from voom.amqp.sender import AMQPSender
+from voom.context import SessionKeys
+from voom.gateway import GatewayShutdownCmd, GatewayMessageDecodeError
+from voom.priorities import BusPriority
 import functools
+import os
+import pika
+import socket
+import sys
+import threading
+import time
+import urlparse
+import uuid
 
 LOG = getLogger(__name__)
 
@@ -139,7 +134,9 @@ class AMQPGateway(object):
         """
         cthread = threading.current_thread()
         if self._ioloop_thread != cthread:
-            self.connection.ioloop.add_timeout(0, functools.partial(self.send, message, properties, sending_thread=cthread, **kwargs))
+            self.connection.ioloop.add_timeout(0,
+                                               functools.partial(self.send, message, properties, sending_thread=cthread,
+                                                                 **kwargs))
             LOG.info("send called from thread %r" % cthread)
             return
         sending_thread = kwargs.pop('sending_thread', None)
@@ -167,7 +164,8 @@ class AMQPGateway(object):
             context[SessionKeys.REPLY_TO] = properties.reply_to
             parts = urlparse.urlparse(properties.reply_to)
             if not parts.scheme:
-                context[SessionKeys.RESPONDER] = lambda addr, message: self.reply(properties, message) # functools.partial(self.reply, properties)
+                context[SessionKeys.RESPONDER] = lambda addr, message: self.reply(properties,
+                                                                                  message) # functools.partial(self.reply, properties)
 
         try:
             body = event.body

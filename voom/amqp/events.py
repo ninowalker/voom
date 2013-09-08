@@ -1,8 +1,3 @@
-'''
-Created on Mar 15, 2013
-
-@author: nino
-'''
 from voom.events.base import Event
 
 AMQPQueueBound = Event.new("AMQPQueueBound", "binding")
