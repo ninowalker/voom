@@ -11,7 +11,10 @@ local = lambda x: os.path.join(base, x)
 
 
 def read(fname):
-    return open(local(fname)).read()
+    try:
+        return open(local(fname)).read()
+    except:
+        return "Not available"
 
 
 def hydrate_examples():
@@ -25,7 +28,10 @@ def hydrate_examples():
     with open(local(README), "w") as f:
         f.write(readme)
 
-hydrate_examples()
+try:
+    hydrate_examples()
+except:
+    pass
 
 
 setup(
