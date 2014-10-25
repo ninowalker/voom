@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from voom import __version__
 import glob
 import os
-
+import sys
 
 README = "README.md"
 
@@ -34,6 +34,12 @@ except:
     pass
 
 
+if "nosetests" in sys.argv or "test" in sys.argv:
+    TEST_REQS = ['nose>=1.0', 'coverage', 'nosexcover', 'mock']
+else:
+    TEST_REQS = []
+
+
 setup(
     name="voom",
     version=__version__,
@@ -44,8 +50,7 @@ setup(
     license="BSD",
     packages=find_packages(exclude=['tests']),
     long_description=read(README),
-    setup_requires=['nose>=1.0', 'coverage', 'nosexcover',
-                    'mock', 'pika', 'protobuf', 'protobuf_to_dict>=0.0.6'],
+    setup_requires=['pika', 'protobuf', 'protobuf_to_dict>=0.0.6'] + TEST_REQS,
     dependency_links=['http://github.com/Livefyre/protobuf-to-dict/tarball/master#egg=protobuf_to_dict-0.0.6'],
     test_suite='nose.collector',
     classifiers=[
