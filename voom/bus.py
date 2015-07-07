@@ -69,7 +69,7 @@ class VoomBus(object):
 
     @property
     def message_context(self):
-        return self.trx.session
+        return self.session
 
     @property
     def current_message(self):
@@ -77,14 +77,18 @@ class VoomBus(object):
 
     @property
     def session(self):
-        return self.trx.frame
+        return self._tls.stack.frame
+
+    @property
+    def frame(self):
+        return self._tls.stack.frame
 
     @contextmanager
-    def using(self, data, local=False):
+    def using(self, data):
         """Provide a context manager for forwarding data to sessions or messages that will be sent
         or updating the session during a transaction
         """
-        with self.trx.push_frame() as f:
+        with self._tls.stack.push_frame() as f:
             f.update(data)
             yield
 
@@ -116,12 +120,12 @@ class VoomBus(object):
 
     def publish(self, body, priority=None):
         self._load()
-        self._send_message(MessageEnvelope(body, self.trx.frame), priority)
+        self._send_message(MessageEnvelope(body, self.session), priority)
 
     def defer(self, msg):
         """Enqueue a message that is sent contingent on the current message
         completing all handlers without aborting."""
-        self.trx._deferred.append(MessageEnvelope(msg, self.trx.frame))
+        self.trx._deferred.append(MessageEnvelope(msg, self.session))
 
     def get_reply_context(self):
         """Get a reply context suitable for passing to reply(). Use
@@ -227,13 +231,14 @@ class VoomBus(object):
         try:
             for msg in trx.consume_messages():
                 self.trx.current_message = msg
-                with self.trx.push_frame(msg.context):
+                with self._tls.stack.push_frame(msg.context):
                     self._dispatch(msg)
         except Exception, e:
             if self.raise_errors:
                 raise
             raise BusError, (msg, e), sys.exc_info()[2] #@IgnorePep8
         finally:
+            self.trx.current_message = None
             if not trx.is_queue_empty():
                 LOG.error("Exiting send with queued item; something is terminally wrong.")
             self._tls.clear()

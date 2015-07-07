@@ -124,13 +124,14 @@ class TestHeaders(unittest.TestCase):
 class TestContextVars(unittest.TestCase):
     def setUp(self):
         self.bus = VoomBus(raise_errors=True)
+        self.context = 0
         self.context2 = 0
 
     def do1(self, msg):
         self.msg = msg
-        self.context = self.bus.session['c']
-        with self.bus.using(dict(c=self.context + 1), local=True):
-            with self.bus.using(dict(c=self.context + 2), local=True):
+        self.context += self.bus.session['c']
+        with self.bus.using(dict(c=self.context + 1)):
+            with self.bus.using(dict(c=self.context + 2)):
                 self.bus.publish("hello")
             self.bus.publish("hello")
 
@@ -138,11 +139,21 @@ class TestContextVars(unittest.TestCase):
         self.msg2 = msg
         self.context2 += self.bus.session['c']
 
-    def test_vars(self):
+    def test_vars_should_add_up(self):
         msg = 1
         self.bus.subscribe(int, self.do1)
         self.bus.subscribe(str, self.do2)
-        with self.bus.using(dict(c=100), local=True):
+        with self.bus.using(dict(c=100)):
             self.bus.publish(msg)
         assert self.context == 100
         assert self.context2 == 101 + 102
+
+    def test_vars_should_add_up_twice(self):
+        msg = 1
+        self.bus.subscribe(int, self.do1)
+        self.bus.subscribe(str, self.do2)
+        with self.bus.using(dict(c=100)):
+            self.bus.publish(msg)
+            self.bus.publish(msg)
+        self.assertEquals(200, self.context)
+        self.assertEquals(606, self.context2)

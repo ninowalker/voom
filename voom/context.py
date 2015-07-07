@@ -18,23 +18,11 @@ class TrxState(object):
     """A thread local state object."""
 
     def __init__(self):
-        self.frame = self.globals = ChainedDict()
         self.current_message = None
         self._deferred = []
         self._queued_messages = []
         self._indx = 1
         self._started = None
-
-    @contextmanager
-    def push_frame(self, f=None):
-        parent = self.frame
-        if f is None:
-            f = parent.extend()
-        self.frame = f
-        try:
-            yield f
-        finally:
-            self.frame = parent
 
     def begin(self):
         self._started = time.time()
@@ -95,6 +83,29 @@ class ChainedDict(dict):
         return d
 
 
+class CactusStack:
+    """
+    Between the ChainedDict (frames), and this (stack),
+    we implement continuation-esque frame management
+
+    See: http://c2.com/cgi/wiki?CactusStack
+    """
+
+    def __init__(self):
+        self.frame = self.globals = ChainedDict()
+
+    @contextmanager
+    def push_frame(self, f=None):
+        parent = self.frame
+        if f is None:
+            f = parent.extend()
+        self.frame = f
+        try:
+            yield f
+        finally:
+            self.frame = parent
+
+
 class SessionKeys(object):
     GATEWAY_EVENT = '_gateway_event'
 
@@ -113,6 +124,13 @@ class SessionKeys(object):
 
 class TrxTLS(threading.local):
     _state = None
+    _stack = None
+
+    @property
+    def stack(self):
+        if not self._stack:
+            self._stack = CactusStack()
+        return self._stack
 
     @property
     def state(self):

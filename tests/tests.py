@@ -370,10 +370,10 @@ class TestWithContext(unittest.TestCase):
     def test_new_frame_when_in_using(self):
         bus = VoomBus()
         data = {1: 2}
-        self.assertEqual({}, bus.trx.frame)
+        self.assertEqual({}, bus.frame)
         with bus.using(data):
-            self.assertEqual(data, bus.trx.frame)
-        self.assertEqual({}, bus.trx.frame)
+            self.assertEqual(data, bus.frame)
+        self.assertEqual({}, bus.frame)
 
     def test_nesting_using_in_same_scope(self):
         bus = VoomBus(raise_errors=True)
@@ -381,10 +381,10 @@ class TestWithContext(unittest.TestCase):
         data2 = {'a': True}
 
         with bus.using(data1):
-            self.assertEquals(data1, bus.trx.frame)
+            self.assertEquals(data1, bus.frame)
             with bus.using(data2):
-                self.assertEquals(data2, bus.trx.frame)
-                self.assertDictContainsSubset(data1, bus.trx.frame)
+                self.assertEquals(data2, bus.frame)
+                self.assertDictContainsSubset(data1, bus.frame)
 
 
 class TestWithTransaction(unittest.TestCase):
@@ -438,5 +438,5 @@ class TestWithTransaction(unittest.TestCase):
         m, frame, trx = msgs[0]
         self.assertEqual(1, m)
         self.assertEqual(True, trx.is_queue_empty())
-        self.assertEqual({}, trx.frame)
+        self.assertEqual({}, bus.frame)
         self.assertEqual(d, frame)
