@@ -1,18 +1,18 @@
-import collections
-import inspect
-import logging
-import heapq
-import bisect
-import sys
-import traceback
-from voom.context import MessageEnvelope, \
-    InvocationFailure, TrxState, SessionKeys, ReplyContext, TrxProxy
+from contextlib import contextmanager
+from voom.context import MessageEnvelope, InvocationFailure, \
+    SessionKeys, ReplyContext, TrxTLS
+from voom.events import MessageForwarded
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError, \
     InvalidStateError
-from voom.priorities import BusPriority  # @UnusedImport
 from voom.local import CurrentThreadChannel
-from voom.events import MessageForwarded
-from contextlib import contextmanager
+from voom.priorities import BusPriority # @UnusedImport
+import bisect
+import collections
+import heapq
+import inspect
+import logging
+import sys
+import traceback
 
 LOG = logging.getLogger(__name__)
 
@@ -27,10 +27,8 @@ class VoomBus(object):
     # : Key used to subscribe to ALL failures
     ERRORS = object()
 
-    def __init__(self, verbose=False, raise_errors=False, loader=None, trx_cls=TrxState):
+    def __init__(self, verbose=False, raise_errors=False, loader=None):
         self.resetConfig()
-        self._trx_proxy = TrxProxy()
-        self._trx_cls = trx_cls
         self._verbose = verbose
         self.raise_errors = raise_errors
         self._current_thread_channel = CurrentThreadChannel()
@@ -41,6 +39,7 @@ class VoomBus(object):
         """
         Revert to an uninitialized state. Useful for testing.
         """
+        self._tls = TrxTLS()
         self._global_handlers = []
         self._error_handlers = []
         self._message_handlers = collections.defaultdict(list)
@@ -66,55 +65,28 @@ class VoomBus(object):
         """
         Returns the active transaction.
         """
-        return self._trx_proxy.state
+        return self._tls.state
 
     @property
     def message_context(self):
-        """
-        Returns the context of the message currently being processed.
-        """
-        return self.trx.current_message_context
+        return self.trx.session
 
     @property
     def current_message(self):
-        return self.trx.current_message if self.trx else None
+        return self.trx.current_message
 
     @property
     def session(self):
-        return self.trx.session if self.trx else self._trx_proxy.session_future
+        return self.trx.frame
 
     @contextmanager
     def using(self, data, local=False):
         """Provide a context manager for forwarding data to sessions or messages that will be sent
         or updating the session during a transaction
         """
-        if self.trx and not local:
-            self.session.update(data)
+        with self.trx.push_frame() as f:
+            f.update(data)
             yield
-            return
-
-        # this is a stack, treat it like one
-        if local:
-            last = self._trx_proxy.message_future
-            self._trx_proxy.message_future = last.copy() if last else {}
-            self._trx_proxy.message_future.update(data)
-            try:
-                yield
-                return
-            finally:
-                self._trx_proxy.message_future = last
-
-        # store and forward
-        nested = True
-        if self._trx_proxy.session_future is None:
-            self._trx_proxy.session_future = {}
-            nested = False
-        self._trx_proxy.session_future.update(data)
-        try:
-            yield
-        finally:
-            if not nested: # we're at the top
-                self._trx_proxy.session_future = None
 
     @contextmanager
     def transaction(self):
@@ -132,24 +104,24 @@ class VoomBus(object):
         the first message is published.
         """
         # if we're nested, sub-messages
-        if self.trx is not None:
+        if self.trx.is_running():
             yield True, self.trx
             return
-        self._trx_proxy.state = self._trx_cls(self._trx_proxy)
 
         try:
+            self.trx.begin()
             yield False, self.trx
         finally:
             self._consume()
 
     def publish(self, body, priority=None):
         self._load()
-        self._send_message(MessageEnvelope(body, self._trx_proxy.message_future), priority)
+        self._send_message(MessageEnvelope(body, self.trx.frame), priority)
 
     def defer(self, msg):
         """Enqueue a message that is sent contingent on the current message
         completing all handlers without aborting."""
-        self.trx._deferred.append(MessageEnvelope(msg, self._trx_proxy.message_future))
+        self.trx._deferred.append(MessageEnvelope(msg, self.trx.frame))
 
     def get_reply_context(self):
         """Get a reply context suitable for passing to reply(). Use
@@ -234,23 +206,14 @@ class VoomBus(object):
 
     def invoke(self, callback, message_envelope):
         """Injection point for doing special things before or after the callback."""
-        try:
-            self.trx.current_message_context = message_envelope.context
-            callback(message_envelope.body)
-        finally:
-            self.trx.current_message_context = None
+        callback(message_envelope.body)
 
     def _send_message(self, message, priority=None):
         # if the queue is not empty, we are in a transaction,
         # so queue it up and it will be processed in the invoking loop.
-        root_event = self.trx is None
-
-        if root_event:
-            self._trx_proxy.state = self._trx_cls(self._trx_proxy)
-
         self.trx.enqueue(message, priority)
 
-        if not root_event:
+        if self.trx.is_running():
             return
         self._consume()
 
@@ -258,19 +221,22 @@ class VoomBus(object):
         # this must be absolutely bullet proof
         # and we must leave this function with an
         # empty queue or we corrupt the bus.
+        trx = self.trx
+        trx.begin()
         msg = None
         try:
-            for msg in self.trx.consume_messages():
+            for msg in trx.consume_messages():
                 self.trx.current_message = msg
-                self._dispatch(msg)
+                with self.trx.push_frame(msg.context):
+                    self._dispatch(msg)
         except Exception, e:
             if self.raise_errors:
                 raise
             raise BusError, (msg, e), sys.exc_info()[2] #@IgnorePep8
         finally:
-            if not self.trx.is_queue_empty():
+            if not trx.is_queue_empty():
                 LOG.error("Exiting send with queued item; something is terminally wrong.")
-            self._trx_proxy.state = None
+            self._tls.clear()
 
     def _dispatch(self, message, queue=None):
         if queue == None:
@@ -280,11 +246,7 @@ class VoomBus(object):
                 try:
                     if self._verbose:
                         LOG.debug("invoking %s (priority=%s): %s", callback, priority, message)
-                    self.trx.current_message_context = message.context
-                    try:
-                        self.invoke(callback, message)
-                    finally:
-                        self.trx.current_message_context = None
+                    self.invoke(callback, message)
                 except AbortProcessing:
                     raise
                 except Exception, ex:

@@ -265,15 +265,15 @@ class TestRaiseErrors(BaseTest):
     def test_bad_publish_error(self):
         @receiver(str)
         def thrower(m):
+            self.assertEqual(True, self.bus.trx.is_running())
             raise ValueError(m)
 
         self.bus.register(thrower)
-
         with patch.object(self.bus, '_send_error') as ex: #@UndefinedVariable
             ex.side_effect = ValueError
             self.bus.publish("x")
-            assert type(ex.call_args_list[0].call_list()[0][0][2]) == ValueError
-        assert self.bus.trx is None
+            self.assertEqual(ValueError, type(ex.call_args_list[0].call_list()[0][0][2]))
+        self.assertEqual(False, self.bus.trx.is_running())
 
     def test_fatal_exception(self):
         @receiver(str)
@@ -367,36 +367,24 @@ class TestDefer(unittest.TestCase):
 
 
 class TestWithContext(unittest.TestCase):
-    def test1(self):
+    def test_new_frame_when_in_using(self):
         bus = VoomBus()
         data = {1: 2}
+        self.assertEqual({}, bus.trx.frame)
         with bus.using(data):
-            assert bus._trx_proxy.session_future == data, bus._session_data.data
-        assert bus._trx_proxy.session_future is None, bus._session_data.data
+            self.assertEqual(data, bus.trx.frame)
+        self.assertEqual({}, bus.trx.frame)
 
-    def test2(self):
-        bus = VoomBus()
-        data1 = {1: 2}
+    def test_nesting_using_in_same_scope(self):
+        bus = VoomBus(raise_errors=True)
+        data1 = {1: 2, 2: 2, 3: 2}
         data2 = {'a': True}
 
-        def func3():
-            bus.publish("1")
-
-        def func2():
+        with bus.using(data1):
+            self.assertEquals(data1, bus.trx.frame)
             with bus.using(data2):
-                func3()
-
-        def func1():
-            with bus.using(data1):
-                func2()
-
-        session = {}
-
-        bus.subscribe(bus.ALL, lambda _: session.update(bus.session))
-
-        func1()
-        data1.update(data2)
-        assert session == data1, session
+                self.assertEquals(data2, bus.trx.frame)
+                self.assertDictContainsSubset(data1, bus.trx.frame)
 
 
 class TestWithTransaction(unittest.TestCase):
@@ -426,22 +414,29 @@ class TestWithTransaction(unittest.TestCase):
         assert self.msgs == [1]
         assert state.is_queue_empty()
 
-    def test_send_on_error(self):
+    def test_still_sends_on_error(self):
+        
         bus = VoomBus()
-        self.msgs = []
-        bus.subscribe(bus.ALL, self.msgs.append)
-
+        msgs = []
+        bus.subscribe(bus.ALL, lambda m: msgs.append((m, bus.session, bus.trx)))
+        d = dict(a=1)
         with nose.tools.assert_raises(ValueError): #@UndefinedVariable
             with bus.transaction() as (nested, state):
                 assert not nested
-                with bus.using(dict(a=1)):
-                    assert bus.session == dict(a=1), bus.session
+                with bus.using(d):
+                    self.assertEqual(d, bus.session)
                     bus.publish(1)
-                assert not self.msgs
+                    # this should not send the message, until
+                    # until we exit the transaction block
+                    self.assertEqual([], msgs)
+                self.assertEqual([], msgs)
                 int("a")
-                with bus.using(dict(a=1)):
-                    bus.publish(1)
+                self.fail("how'd I get here")
 
-        assert self.msgs == [1]
-        assert state.is_queue_empty()
-        assert state.session == dict(a=1), state.session
+        # ensure we didn't lose the message
+        self.assertEqual(1, len(msgs))
+        m, frame, trx = msgs[0]
+        self.assertEqual(1, m)
+        self.assertEqual(True, trx.is_queue_empty())
+        self.assertEqual({}, trx.frame)
+        self.assertEqual(d, frame)

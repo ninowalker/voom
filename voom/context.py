@@ -1,8 +1,10 @@
 from collections import namedtuple
+from contextlib import contextmanager
+import heapq
+import threading
+import time
 
 """A wrapper passed internally by the bus."""
-import threading
-import heapq
 
 MessageEnvelope = namedtuple("MessageEnvelope", ["body", "context"])
 
@@ -15,25 +17,42 @@ ReplyContext = namedtuple("ReplyContext", ["reply_to", "responder", "thread_chan
 class TrxState(object):
     """A thread local state object."""
 
-    def __init__(self, trx_proxy):
-        self.session = Session()
+    def __init__(self):
+        self.frame = self.globals = ChainedDict()
         self.current_message = None
-        self.current_message_context = None
         self._deferred = []
         self._queued_messages = []
         self._indx = 1
+        self._started = None
 
-        if trx_proxy is not None and trx_proxy.session_future:
-            self.session.update(trx_proxy.session_future)
+    @contextmanager
+    def push_frame(self, f=None):
+        parent = self.frame
+        if f is None:
+            f = parent.extend()
+        self.frame = f
+        try:
+            yield f
+        finally:
+            self.frame = parent
+
+    def begin(self):
+        self._started = time.time()
+
+    def is_running(self):
+        return bool(self._started)
 
     def consume_messages(self):
         """A destructive iterator for consuming all queued messages."""
         while self._queued_messages:
             yield heapq.heappop(self._queued_messages)[1]
 
+    def size(self):
+        return len(self._queued_messages)
+
     def is_queue_empty(self):
         """Got messages?"""
-        return len(self._queued_messages) == 0
+        return not bool(self.size())
 
     def enqueue(self, message, priority=None):
         """Enqueue a message during this session."""
@@ -44,11 +63,36 @@ class TrxState(object):
         heapq.heappush(self._queued_messages, (indx, message))
 
 
-class Session(dict):
-    """A bag for storing session variables during a Bus.publish() call."""
+class ChainedDict(dict):
+    def __init__(self, *args, **kwargs):
+        self.parent = None
+        dict.__init__(self, *args, **kwargs)
 
-    def __init__(self, **kwargs):
-        self.update(kwargs)
+    def __getitem__(self, key):
+        try:
+            return dict.__getitem__(self, key)
+        except KeyError:
+            if self.parent:
+                return self.parent[key]
+            raise
+
+    def __contains__(self, key):
+        try:
+            self[key]
+            return True
+        except KeyError:
+            return False
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def extend(self):
+        d = ChainedDict()
+        d.parent = self
+        return d
 
 
 class SessionKeys(object):
@@ -67,8 +111,19 @@ class SessionKeys(object):
     REPLY_TO = "_reply_to"
 
 
-class TrxProxy(threading.local):
-    state = None
-    session_future = None
-    message_future = None
+class TrxTLS(threading.local):
+    _state = None
 
+    @property
+    def state(self):
+        s = self._state
+        if not s:
+            self._state = s = TrxState()
+        return s
+
+    @state.deleter
+    def state(self):
+        self._state = None
+
+    def clear(self):
+        del self.state

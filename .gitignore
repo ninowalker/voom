@@ -10,3 +10,5 @@ cover
 *.class
 *~
 .DS_Store
+coverage.xml
+nosetests.xml
