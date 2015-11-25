@@ -34,7 +34,6 @@ API Documentation
    :maxdepth: 2
 
    voom_bus
-   voom_amqp
 
 Quick Guide
 ===========
