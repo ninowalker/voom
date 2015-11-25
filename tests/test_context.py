@@ -1,5 +1,5 @@
 from voom.bus import VoomBus, BusPriority
-from voom.context import Session, TrxState
+from voom.context import TrxState, ChainedDict
 from voom.decorators import receiver
 from voom.exceptions import AbortProcessing
 import unittest
@@ -7,7 +7,7 @@ import unittest
 
 class TestState(unittest.TestCase):
     def test_consume(self):
-        s = TrxState(None)
+        s = TrxState()
         i = -1
         for i, _m in enumerate(s.consume_messages()):
             pass
@@ -30,7 +30,7 @@ class TestState(unittest.TestCase):
         assert s.is_queue_empty()
 
     def test_consume_and_add(self):
-        s = TrxState(None)
+        s = TrxState()
         s.enqueue(1)
         for i, _m in enumerate(s.consume_messages()):
             if i < 10:
@@ -38,7 +38,7 @@ class TestState(unittest.TestCase):
         assert i == 10, i
 
     def test_consume_heap_order(self):
-        s = TrxState(None)
+        s = TrxState()
         s.enqueue("b", priority=2)
         s.enqueue("a", priority=1)
 
@@ -56,7 +56,7 @@ class TestState(unittest.TestCase):
         assert m == "ba"
 
     def test_consume_heap_auto_order(self):
-        s = TrxState(None)
+        s = TrxState()
         s.enqueue("b")
         s.enqueue("a")
         s.enqueue("!", priority=0)
@@ -69,7 +69,7 @@ class TestState(unittest.TestCase):
 
 class TestSession(unittest.TestCase):
     def test1(self):
-        s = Session()
+        s = ChainedDict()
         s[1] = 2
         assert s[1] == 2
         assert 1 in s
@@ -83,7 +83,7 @@ class TestHeaders(unittest.TestCase):
 
     def test_arbitrary_headers(self):
         uni = u'\u014b'
-        r = Session(**{'foo': 1, uni: 2})
+        r = ChainedDict(**{'foo': 1, uni: 2})
         assert r['foo'] == 1
         assert r[uni] == 2
         assert uni in r
@@ -92,7 +92,7 @@ class TestHeaders(unittest.TestCase):
 
     def test_unicode(self):
         uni = u'\u014b'
-        r = Session(**{'foo': 1, uni: 2})
+        r = ChainedDict(**{'foo': 1, uni: 2})
         unicode(r)
         repr(r)
         print r
@@ -124,25 +124,36 @@ class TestHeaders(unittest.TestCase):
 class TestContextVars(unittest.TestCase):
     def setUp(self):
         self.bus = VoomBus(raise_errors=True)
+        self.context = 0
         self.context2 = 0
 
     def do1(self, msg):
         self.msg = msg
-        self.context = self.bus.message_context['c']
-        with self.bus.using(dict(c=self.context + 1), local=True):
-            with self.bus.using(dict(c=self.context + 2), local=True):
+        self.context += self.bus.session['c']
+        with self.bus.using(dict(c=self.context + 1)):
+            with self.bus.using(dict(c=self.context + 2)):
                 self.bus.publish("hello")
             self.bus.publish("hello")
 
     def do2(self, msg):
         self.msg2 = msg
-        self.context2 += self.bus.message_context['c']
+        self.context2 += self.bus.session['c']
 
-    def test_vars(self):
+    def test_vars_should_add_up(self):
         msg = 1
         self.bus.subscribe(int, self.do1)
         self.bus.subscribe(str, self.do2)
-        with self.bus.using(dict(c=100), local=True):
+        with self.bus.using(dict(c=100)):
             self.bus.publish(msg)
         assert self.context == 100
         assert self.context2 == 101 + 102
+
+    def test_vars_should_add_up_twice(self):
+        msg = 1
+        self.bus.subscribe(int, self.do1)
+        self.bus.subscribe(str, self.do2)
+        with self.bus.using(dict(c=100)):
+            self.bus.publish(msg)
+            self.bus.publish(msg)
+        self.assertEquals(200, self.context)
+        self.assertEquals(606, self.context2)
