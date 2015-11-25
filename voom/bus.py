@@ -1,18 +1,21 @@
+import bisect
+import collections
 from contextlib import contextmanager
+import heapq
+import inspect
+import logging
+import sys
+import threading
+import traceback
+
 from voom.context import MessageEnvelope, InvocationFailure, \
     SessionKeys, ReplyContext, TrxTLS
 from voom.events import MessageForwarded
 from voom.exceptions import AbortProcessing, BusError, InvalidAddressError, \
     InvalidStateError
 from voom.local import CurrentThreadChannel
-from voom.priorities import BusPriority # @UnusedImport
-import bisect
-import collections
-import heapq
-import inspect
-import logging
-import sys
-import traceback
+from voom.priorities import BusPriority  # @UnusedImport
+
 
 LOG = logging.getLogger(__name__)
 
@@ -45,6 +48,7 @@ class VoomBus(object):
         self._message_handlers = collections.defaultdict(list)
         self._loader = None
         self._loaded = False
+        self._load_lock = None
 
     @property
     def loader(self):
@@ -59,6 +63,7 @@ class VoomBus(object):
             raise ValueError("Bus loader already initialized with another value: %s" % self._loader)
         self._loader = value
         self._loaded = False
+        self._load_lock = threading.RLock()
 
     @property
     def trx(self):
@@ -303,10 +308,15 @@ class VoomBus(object):
     def _load(self):
         if self._loaded or not self._loader:
             return
-        LOG.info("running loader...")
-        try:
-            self._loader()
-            self._loaded = True
-        except:
-            LOG.exception("Failed to run loader!")
-            raise
+        with self._load_lock:
+            if self._loaded or not self._loader:
+                return
+            try:
+                LOG.info("running loader...")
+                self._loader()
+            except:
+                LOG.exception("Failed to run loader!")
+                raise
+            finally:
+                self._loaded = True
+
